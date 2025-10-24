@@ -27,7 +27,7 @@ The SimpleMDM API documentation is published at https://api.simplemdm.com/v1. Th
 | Profiles | `/api/v1/profiles` | `simplemdm_profile` | `simplemdm_profile` | Covered |
 | Push Certificate | `/api/v1/push_certificate` | - | - | Not covered |
 | Scripts | `/api/v1/scripts` | `simplemdm_script` | `simplemdm_script` | Covered |
-| Script Jobs | `/api/v1/script_jobs` | `simplemdm_scriptjob` | `simplemdm_scriptjob` | Covered |
+| Script Jobs | `/api/v1/script_jobs` | `simplemdm_scriptjob` | `simplemdm_scriptjob` | Covered (resource now cancels jobs via DELETE and surfaces job metadata, execution counters, device results, script content, and variable support; data source mirrors these read-only attributes) |
 | Webhooks | (Event delivery) | - | - | Not covered |
 
 ## Observations
