@@ -8,7 +8,6 @@ import (
 
 func TestAccAssignmentGroupResource(t *testing.T) {
 	testAccPreCheck(t)
-	_ = testAccRequireEnv(t, "SIMPLEMDM_RUN_ASSIGNMENT_GROUP_TESTS")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
