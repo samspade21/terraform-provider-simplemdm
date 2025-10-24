@@ -20,6 +20,13 @@ var Catalog = []EndpointCoverage{
 		DocsURL:        "https://api.simplemdm.com/v1/#tag/Apps",
 	},
 	{
+		Name:           "Managed App Configs",
+		Endpoint:       "/api/v1/apps/{APP_ID}/managed_configs",
+		ResourceType:   "simplemdm_managed_config",
+		DataSourceType: "simplemdm_managed_config",
+		DocsURL:        "https://api.simplemdm.com/v1/#tag/Managed-App-Configs",
+	},
+	{
 		Name:           "Assignment Groups",
 		Endpoint:       "/api/v1/assignment_groups",
 		ResourceType:   "simplemdm_assignmentgroup",
@@ -66,6 +73,13 @@ var Catalog = []EndpointCoverage{
 		ResourceType:   "simplemdm_devicegroup",
 		DataSourceType: "simplemdm_devicegroup",
 		DocsURL:        "https://api.simplemdm.com/v1/#tag/Device-Groups",
+	},
+	{
+		Name:           "Enrollments",
+		Endpoint:       "/api/v1/enrollments",
+		ResourceType:   "simplemdm_enrollment",
+		DataSourceType: "simplemdm_enrollment",
+		DocsURL:        "https://api.simplemdm.com/v1/#tag/Enrollments",
 	},
 	{
 		Name:           "Profiles",
