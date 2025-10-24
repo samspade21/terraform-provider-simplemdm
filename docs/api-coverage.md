@@ -19,7 +19,7 @@ The SimpleMDM API documentation is published at https://api.simplemdm.com/v1. Th
 | DEP Servers | `/api/v1/dep_servers` | - | - | Not covered |
 | Devices | `/api/v1/devices` | `simplemdm_device` | `simplemdm_device` | Covered |
 | Device Groups (deprecated) | `/api/v1/device_groups` | `simplemdm_devicegroup` | `simplemdm_devicegroup` | Covered |
-| Enrollments | `/api/v1/enrollments` | - | - | Not covered |
+| Enrollments | `/api/v1/enrollments` | `simplemdm_enrollment` | `simplemdm_enrollment` | Covered (resource manages enrollment lifecycle and optional invitation dispatch; data source retrieves enrollment attributes) |
 | Installed Apps | `/api/v1/installed_apps` | - | - | Not covered |
 | Logs | `/api/v1/logs` | - | - | Not covered |
 | Lost Mode | `/api/v1/devices/{DEVICE_ID}/lost_mode` | - | - | Not covered |
