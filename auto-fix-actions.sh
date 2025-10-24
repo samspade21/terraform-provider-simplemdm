@@ -2,7 +2,6 @@
 set -euo pipefail
 
 MAX_ITERATIONS=5
-BRANCH_NAME="codex-auto-fix"
 LOG_DIR=".auto-fix-logs"
 MODEL_NAME="gpt-4o-mini"
 
@@ -42,11 +41,13 @@ fi
 BASE_BRANCH=$(default_branch)
 if [[ -n "$BASE_BRANCH" ]]; then
   git fetch origin "$BASE_BRANCH" >/dev/null 2>&1 || true
-  git checkout "$BASE_BRANCH"
-  git pull --ff-only origin "$BASE_BRANCH"
+  if git show-ref --verify --quiet "refs/heads/$BASE_BRANCH"; then
+    git checkout "$BASE_BRANCH"
+    git pull --ff-only origin "$BASE_BRANCH" || git pull origin "$BASE_BRANCH"
+  else
+    git checkout -b "$BASE_BRANCH" "origin/$BASE_BRANCH"
+  fi
 fi
-
-git checkout -B "$BRANCH_NAME"
 
 declare -A SUMMARY
 
@@ -105,6 +106,60 @@ wait_for_run() {
   return 1
 }
 
+checkout_run_branch() {
+  local head_branch="$1"
+
+  if [[ -z "$head_branch" || "$head_branch" == "null" ]]; then
+    return 1
+  fi
+
+  git fetch origin "$head_branch" >/dev/null 2>&1 || true
+
+  git reset --hard >/dev/null 2>&1 || true
+  git clean -fd >/dev/null 2>&1 || true
+
+  if git show-ref --verify --quiet "refs/heads/$head_branch"; then
+    git checkout "$head_branch"
+  else
+    git checkout -b "$head_branch" "origin/$head_branch"
+  fi
+
+  if git rev-parse --verify "origin/$head_branch" >/dev/null 2>&1; then
+    git reset --hard "origin/$head_branch" >/dev/null 2>&1 || true
+  fi
+
+  git clean -fd >/dev/null 2>&1 || true
+
+  return 0
+}
+
+find_run_for_commit() {
+  local workflow_path="$1"
+  local head_branch="$2"
+  local head_sha="$3"
+
+  local attempt=0
+  local max_attempts=30
+  local runs_json
+  local new_run_id
+
+  while (( attempt < max_attempts )); do
+    runs_json=$(gh api "repos/$NAME_WITH_OWNER/actions/runs" -f branch="$head_branch" -f per_page=50)
+    if [[ -n "$runs_json" ]]; then
+      new_run_id=$(jq -r --arg path "$workflow_path" --arg sha "$head_sha" \
+        '.workflow_runs[] | select(.path == $path and .head_sha == $sha) | .id' <<<"$runs_json" | head -n1)
+      if [[ -n "$new_run_id" && "$new_run_id" != "null" ]]; then
+        echo "$new_run_id"
+        return 0
+      fi
+    fi
+    sleep 10
+    ((attempt++))
+  done
+
+  return 1
+}
+
 ITERATION=1
 while (( ITERATION <= MAX_ITERATIONS )); do
   echo "Iteration $ITERATION/$MAX_ITERATIONS" >&2
@@ -124,6 +179,23 @@ while (( ITERATION <= MAX_ITERATIONS )); do
     detail_json=$(get_run_details "$run_id")
     display_title=$(jq -r '.display_title' <<<"$detail_json")
     workflow_path=$(jq -r '.workflow_path' <<<"$detail_json")
+    head_branch=$(jq -r '.head_branch' <<<"$detail_json")
+
+    if [[ -z "$head_branch" || "$head_branch" == "null" ]]; then
+      if [[ -n "$BASE_BRANCH" ]]; then
+        head_branch="$BASE_BRANCH"
+      else
+        echo "Unable to determine branch for run $run_id" >&2
+        SUMMARY["$run_name"]="Unknown branch"
+        continue
+      fi
+    fi
+
+    if ! checkout_run_branch "$head_branch"; then
+      echo "Failed to checkout branch $head_branch for run $run_id" >&2
+      SUMMARY["$run_name"]="Failed to checkout branch"
+      continue
+    fi
 
     log_file="$LOG_DIR/run-${run_id}.log"
     gh run view "$run_id" --log >"$log_file"
@@ -165,14 +237,20 @@ while (( ITERATION <= MAX_ITERATIONS )); do
         git commit -am "$commit_msg"
       fi
 
-      git push -u origin "$BRANCH_NAME" 2>/dev/null || git push -u origin "$BRANCH_NAME"
+      git push origin "$head_branch"
 
-      echo "Rerunning workflow $run_id" >&2
-      gh run rerun "$run_id" --failed
-      if wait_for_run "$run_id"; then
-        SUMMARY["$run_name"]="Fixed on iteration $ITERATION"
+      new_sha=$(git rev-parse HEAD)
+      echo "Waiting for new workflow run on branch $head_branch to pick up commit $new_sha" >&2
+
+      if new_run_id=$(find_run_for_commit "$workflow_path" "$head_branch" "$new_sha"); then
+        echo "Monitoring new run $new_run_id for workflow $run_name" >&2
+        if wait_for_run "$new_run_id"; then
+          SUMMARY["$run_name"]="Fixed on iteration $ITERATION (run $new_run_id)"
+        else
+          SUMMARY["$run_name"]="Still failing after iteration $ITERATION (run $new_run_id)"
+        fi
       else
-        SUMMARY["$run_name"]="Still failing after iteration $ITERATION"
+        SUMMARY["$run_name"]="No new run detected for commit $new_sha"
       fi
     else
       SUMMARY["$run_name"]="Failed to apply diff"
