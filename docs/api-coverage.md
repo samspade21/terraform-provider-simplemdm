@@ -18,19 +18,19 @@ The SimpleMDM API documentation is published at https://api.simplemdm.com/v1. Th
 | Custom Declarations | `/api/v1/custom_declarations`, `/api/v1/custom_declarations/{PROFILE_ID}/devices/{DEVICE_ID}` | `simplemdm_customdeclaration`, `simplemdm_customdeclaration_device_assignment` | `simplemdm_customdeclaration` | Covered (resource manages declaration lifecycle and payload download; assignment resource handles device-level deployment) |
 | DEP Servers | `/api/v1/dep_servers` | - | - | Not covered |
 | Devices | `/api/v1/devices` | `simplemdm_device` | `simplemdm_device` | Covered |
-| Device Groups (deprecated) | `/api/v1/device_groups` | `simplemdm_devicegroup` | `simplemdm_devicegroup` | Covered |
+| Device Groups (deprecated) | `/api/v1/device_groups` | `simplemdm_devicegroup` | `simplemdm_devicegroup` | Covered (resource provisions legacy groups via create or clone, manages name, attributes, configuration profile assignments, and calls the delete endpoint; data source reads existing groups) |
 | Enrollments | `/api/v1/enrollments` | - | - | Not covered |
 | Installed Apps | `/api/v1/installed_apps` | - | - | Not covered |
 | Logs | `/api/v1/logs` | - | - | Not covered |
 | Lost Mode | `/api/v1/devices/{DEVICE_ID}/lost_mode` | - | - | Not covered |
-| Managed App Configs | `/api/v1/apps/{APP_ID}/managed_configs` | `simplemdm_managed_config` | `simplemdm_managed_config` | Covered (resource creates and deletes managed configs, triggers the push endpoint after changes, and data source reads existing keys) |
-| Profiles | `/api/v1/profiles` | `simplemdm_profile` | `simplemdm_profile` | Covered |
+| Managed App Configs | `/api/v1/apps/{APP_ID}/managed_configs` | - | - | Not covered |
+| Profiles | `/api/v1/profiles` | `simplemdm_profile` | `simplemdm_profile` | Covered (resource & data source expose profile metadata including payload type, assignment counts, SHA/source details, and assigned group IDs; device and device group resources manage the device/group assignment endpoints) |
 | Push Certificate | `/api/v1/push_certificate` | - | - | Not covered |
-| Scripts | `/api/v1/scripts` | `simplemdm_script` | `simplemdm_script` | Covered |
+| Scripts | `/api/v1/scripts` | `simplemdm_script` | `simplemdm_script` | Covered (resource & data source expose script content, variable support flag, creator, and creation/update timestamps) |
 | Script Jobs | `/api/v1/script_jobs` | `simplemdm_scriptjob` | `simplemdm_scriptjob` | Covered |
 | Webhooks | (Event delivery) | - | - | Not covered |
 
 ## Observations
 
-- The provider implements Terraform resources and data sources for all configuration collections backed by the `/api/v1` endpoints enumerated in `internal/apicatalog/catalog.go`. These include apps, assignment groups, custom attributes, custom configuration profiles, custom declarations, devices, device groups, profiles, scripts, and script jobs.
-- Additional API sections such as account management, DEP servers, enrollments, installed apps, logging, device actions (lost mode and push certificate lifecycle), and webhook subscriptions currently have no Terraform coverage.
+- The provider implements Terraform resources and data sources for all configuration collections backed by the `/api/v1` endpoints enumerated in `internal/apicatalog/catalog.go`. These include apps, assignment groups, custom attributes, custom configuration profiles, custom declarations, devices, device groups (including create/clone/update/delete support), profiles, scripts, and script jobs.
+- Additional API sections such as account management, DEP servers, enrollments, installed apps, logging, device actions (lost mode, push certificate lifecycle, and managed app configs), and webhook subscriptions currently have no Terraform coverage.
