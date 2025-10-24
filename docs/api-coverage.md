@@ -17,7 +17,7 @@ The SimpleMDM API documentation is published at https://api.simplemdm.com/v1. Th
 | Custom Attributes | `/api/v1/custom_attributes` | `simplemdm_attribute` | `simplemdm_attribute` | Covered (resource and data source manage attribute definitions; device, assignment group, and device group resources integrate with the corresponding `custom_attribute_values` endpoints) |
 | Custom Declarations | `/api/v1/custom_declarations` | `simplemdm_customdeclaration` | `simplemdm_customdeclaration` | Covered |
 | DEP Servers | `/api/v1/dep_servers` | - | - | Not covered |
-| Devices | `/api/v1/devices` | `simplemdm_device` | `simplemdm_device` | Covered |
+| Devices | `/api/v1/devices` | `simplemdm_device`, `simplemdm_device_command` | `simplemdm_device`, `simplemdm_devices`, `simplemdm_device_profiles`, `simplemdm_device_installed_apps`, `simplemdm_device_users` | Covered (resource manages lifecycle operations and command execution, data sources surface list, profile, installed app, and user collections, and expose full attribute payloads) |
 | Device Groups (deprecated) | `/api/v1/device_groups` | `simplemdm_devicegroup` | `simplemdm_devicegroup` | Covered |
 | Enrollments | `/api/v1/enrollments` | - | - | Not covered |
 | Installed Apps | `/api/v1/installed_apps` | - | - | Not covered |
@@ -32,5 +32,5 @@ The SimpleMDM API documentation is published at https://api.simplemdm.com/v1. Th
 
 ## Observations
 
-- The provider implements Terraform resources and data sources for all configuration collections backed by the `/api/v1` endpoints enumerated in `internal/apicatalog/catalog.go`. These include apps, assignment groups, custom attributes, custom configuration profiles, custom declarations, devices, device groups, profiles, scripts, and script jobs.
+- The provider implements Terraform resources and data sources for all configuration collections backed by the `/api/v1` endpoints enumerated in `internal/apicatalog/catalog.go`. These include apps, assignment groups, custom attributes, custom configuration profiles, custom declarations, devices (including listing endpoints, device-scoped collections, and command actions), device groups, profiles, scripts, and script jobs.
 - Additional API sections such as account management, DEP servers, enrollments, installed apps, logging, device actions (lost mode, push certificate lifecycle, and managed app configs), and webhook subscriptions currently have no Terraform coverage.
