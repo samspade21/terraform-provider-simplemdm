@@ -23,7 +23,7 @@ The SimpleMDM API documentation is published at https://api.simplemdm.com/v1. Th
 | Installed Apps | `/api/v1/installed_apps` | - | - | Not covered |
 | Logs | `/api/v1/logs` | - | - | Not covered |
 | Lost Mode | `/api/v1/devices/{DEVICE_ID}/lost_mode` | - | - | Not covered |
-| Managed App Configs | `/api/v1/apps/{APP_ID}/managed_configs` | - | - | Not covered |
+| Managed App Configs | `/api/v1/apps/{APP_ID}/managed_configs` | `simplemdm_managed_config` | `simplemdm_managed_config` | Covered (resource creates and deletes managed configs, triggers the push endpoint after changes, and data source reads existing keys) |
 | Profiles | `/api/v1/profiles` | `simplemdm_profile` | `simplemdm_profile` | Covered |
 | Push Certificate | `/api/v1/push_certificate` | - | - | Not covered |
 | Scripts | `/api/v1/scripts` | `simplemdm_script` | `simplemdm_script` | Covered |
@@ -33,4 +33,4 @@ The SimpleMDM API documentation is published at https://api.simplemdm.com/v1. Th
 ## Observations
 
 - The provider implements Terraform resources and data sources for all configuration collections backed by the `/api/v1` endpoints enumerated in `internal/apicatalog/catalog.go`. These include apps, assignment groups, custom attributes, custom configuration profiles, custom declarations, devices, device groups, profiles, scripts, and script jobs.
-- Additional API sections such as account management, DEP servers, enrollments, installed apps, logging, device actions (lost mode, push certificate lifecycle, and managed app configs), and webhook subscriptions currently have no Terraform coverage.
+- Additional API sections such as account management, DEP servers, enrollments, installed apps, logging, device actions (lost mode and push certificate lifecycle), and webhook subscriptions currently have no Terraform coverage.
