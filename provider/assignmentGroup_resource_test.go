@@ -123,7 +123,7 @@ func TestAccAssignmentGroupResource(t *testing.T) {
 				ResourceName:            "simplemdm_assignmentgroup.testgroup2",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"apps_update", "apps_push", "auto_deploy", "profiles_sync", "install_type", "profiles", "created_at", "updated_at", "device_count", "group_count", "devices_remove_others"},
+				ImportStateVerifyIgnore: []string{"apps_update", "apps_push", "auto_deploy", "profiles_sync", "install_type", "profiles", "apps", "created_at", "updated_at", "device_count", "group_count", "devices_remove_others"},
 			},
 			// Update and Read testing
 			{

@@ -53,8 +53,9 @@ func TestAccProfileResource_ReadOnly(t *testing.T) {
 					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "group_count"),
 					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "device_count"),
 					
-					// Note: install_type, source, created_at, and updated_at may be null for some profiles
-					// These are Optional+Computed fields that the API doesn't always return
+					// Note: install_type, source, created_at, and updated_at are Optional+Computed
+					// and may not be returned by the SimpleMDM API for all profile types.
+					// We don't assert these fields to avoid test failures with different profile types.
 				),
 			},
 			// Step 2: ImportState test - verify resource can be imported
