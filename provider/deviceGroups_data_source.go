@@ -167,9 +167,9 @@ type deviceGroupsAPIResponse struct {
 
 // deviceGroupData represents a single device group in the list response
 type deviceGroupData struct {
-	ID         int                    `json:"id"`
-	Type       string                 `json:"type"`
-	Attributes deviceGroupAttributes  `json:"attributes"`
+	ID         int                   `json:"id"`
+	Type       string                `json:"type"`
+	Attributes deviceGroupAttributes `json:"attributes"`
 }
 
 type deviceGroupAttributes struct {

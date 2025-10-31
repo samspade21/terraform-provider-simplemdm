@@ -206,8 +206,8 @@ type profilesAPIResponse struct {
 
 // profileDataList represents a single profile in the list response
 type profileDataList struct {
-	ID         int                  `json:"id"`
-	Type       string               `json:"type"`
+	ID         int                   `json:"id"`
+	Type       string                `json:"type"`
 	Attributes profileListAttributes `json:"attributes"`
 }
 

@@ -110,7 +110,7 @@ func (d *enrollmentsDataSource) Read(ctx context.Context, req datasource.ReadReq
 	entries := make([]enrollmentsDataSourceEnrollmentModel, 0, len(enrollments))
 	for _, enrollment := range enrollments {
 		flat := flattenEnrollment(&enrollment)
-		
+
 		entry := enrollmentsDataSourceEnrollmentModel{
 			ID:             types.StringValue(strconv.Itoa(flat.ID)),
 			UserEnrollment: types.BoolValue(flat.UserEnrollment),

@@ -206,18 +206,18 @@ type customProfilesAPIResponse struct {
 
 // customProfileData represents a single custom profile in the list response
 type customProfileData struct {
-	ID         int                    `json:"id"`
-	Type       string                 `json:"type"`
+	ID         int                     `json:"id"`
+	Type       string                  `json:"type"`
 	Attributes customProfileAttributes `json:"attributes"`
 }
 
 type customProfileAttributes struct {
-	Name                  string `json:"name"`
-	UserScope             bool   `json:"user_scope"`
-	AttributeSupport      bool   `json:"attribute_support"`
-	EscapeAttributes      bool   `json:"escape_attributes"`
+	Name                   string `json:"name"`
+	UserScope              bool   `json:"user_scope"`
+	AttributeSupport       bool   `json:"attribute_support"`
+	EscapeAttributes       bool   `json:"escape_attributes"`
 	ReinstallAfterOsUpdate bool   `json:"reinstall_after_os_update"`
-	ProfileIdentifier     string `json:"profile_identifier"`
-	GroupCount            int    `json:"group_count"`
-	DeviceCount           int    `json:"device_count"`
+	ProfileIdentifier      string `json:"profile_identifier"`
+	GroupCount             int    `json:"group_count"`
+	DeviceCount            int    `json:"device_count"`
 }

@@ -298,6 +298,14 @@ var dataSourceDefinitions = []DataSourceDefinition{
 		APIEndpoints: []string{"/api/v1/apps/{APP_ID}/managed_configs"},
 	},
 	{
+		TypeName:     "simplemdm_managed_configs",
+		Factory:      ManagedConfigsDataSource,
+		DocsPath:     "docs/data-sources/managed_configs.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_managed_configs"},
+		TestFiles:    []string{"provider/managedConfigs_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/apps/{APP_ID}/managed_configs"},
+	},
+	{
 		TypeName:     "simplemdm_apps",
 		Factory:      AppsDataSource,
 		DocsPath:     "docs/data-sources/apps.md",

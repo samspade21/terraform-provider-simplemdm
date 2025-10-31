@@ -188,8 +188,8 @@ type scriptsAPIResponse struct {
 
 // scriptDataList represents a single script in the list response
 type scriptDataList struct {
-	ID         int                 `json:"id"`
-	Type       string              `json:"type"`
+	ID         int                  `json:"id"`
+	Type       string               `json:"type"`
 	Attributes scriptListAttributes `json:"attributes"`
 }
 
