@@ -22,7 +22,11 @@ import (
 func TestAccProfileResource_ReadOnly(t *testing.T) {
 	testAccPreCheck(t)
 
-	profileID := testAccRequireEnv(t, "SIMPLEMDM_PROFILE_ID")
+	profileID := testAccGetEnv(t, "SIMPLEMDM_PROFILE_ID")
+	
+	if profileID == "" {
+		t.Skip("SIMPLEMDM_PROFILE_ID not set - skipping test as profiles can only be created via SimpleMDM UI")
+	}
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
