@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	simplemdm "github.com/DavidKrau/simplemdm-go-client"
@@ -20,34 +19,32 @@ func testAccCheckScriptJobDestroy(s *terraform.State) error {
 func TestAccScriptJobResource(t *testing.T) {
 	testAccPreCheck(t)
 
-	// Use pre-existing fixture device group for script jobs
-	// Note: SimpleMDM API does not support assignment_group_ids for script jobs despite what the docs may suggest
-	deviceGroupID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_GROUP_ID")
-	scriptID := testAccRequireEnv(t, "SIMPLEMDM_SCRIPT_ID")
-
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckScriptJobDestroy,
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: providerConfig + fmt.Sprintf(`
-					# Use pre-existing fixture resources
-					data "simplemdm_script" "fixture_script" {
-						id = "%s"
+				Config: providerConfig + `
+					# Create dynamic script for testing
+					resource "simplemdm_script" "test_script" {
+						name            = "Test Script Job Script"
+						scriptfile      = file("./testfiles/testscript.sh")
+						variablesupport = true
 					}
 
-					data "simplemdm_devicegroup" "fixture_group" {
-						id = "%s"
+					# Create dynamic device group for testing
+					resource "simplemdm_devicegroup" "test_group" {
+						name = "Test Script Job Device Group"
 					}
 
-					# Create script job using fixture device group
+					# Create script job using dynamic resources
 					resource "simplemdm_scriptjob" "test_job" {
-						script_id  = data.simplemdm_script.fixture_script.id
+						script_id  = simplemdm_script.test_script.id
 						device_ids = []
-						group_ids  = [data.simplemdm_devicegroup.fixture_group.id]
+						group_ids  = [simplemdm_devicegroup.test_group.id]
 					}
-				`, scriptID, deviceGroupID),
+				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Check the script job attributes
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "id"),
@@ -55,11 +52,11 @@ func TestAccScriptJobResource(t *testing.T) {
 					// Verify dynamic relationships
 					resource.TestCheckResourceAttrPair(
 						"simplemdm_scriptjob.test_job", "script_id",
-						"data.simplemdm_script.fixture_script", "id",
+						"simplemdm_script.test_script", "id",
 					),
 					resource.TestCheckResourceAttrPair(
 						"simplemdm_scriptjob.test_job", "group_ids.0",
-						"data.simplemdm_devicegroup.fixture_group", "id",
+						"simplemdm_devicegroup.test_group", "id",
 					),
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "job_identifier"),
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "status"),
@@ -76,25 +73,28 @@ func TestAccScriptJobResource(t *testing.T) {
 			},
 			// Update and Read testing
 			{
-				Config: providerConfig + fmt.Sprintf(`
-					# Use fixture script for update
-					data "simplemdm_script" "fixture_script_updated" {
-						id = "%s"
+				Config: providerConfig + `
+					# Keep the same script
+					resource "simplemdm_script" "test_script" {
+						name            = "Test Script Job Script"
+						scriptfile      = file("./testfiles/testscript.sh")
+						variablesupport = true
 					}
 
-					data "simplemdm_devicegroup" "fixture_group_updated" {
-						id = "%s"
+					# Keep the same device group
+					resource "simplemdm_devicegroup" "test_group" {
+						name = "Test Script Job Device Group"
 					}
 
 					# Update script job with custom attributes
 					resource "simplemdm_scriptjob" "test_job" {
-						script_id              = data.simplemdm_script.fixture_script_updated.id
+						script_id              = simplemdm_script.test_script.id
 						device_ids             = []
-						group_ids              = [data.simplemdm_devicegroup.fixture_group_updated.id]
+						group_ids              = [simplemdm_devicegroup.test_group.id]
 						custom_attribute       = "SomeAttribute"
 						custom_attribute_regex = ".*"
 					}
-				`, scriptID, deviceGroupID),
+				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Check the updated script job attributes
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "id"),
@@ -104,11 +104,11 @@ func TestAccScriptJobResource(t *testing.T) {
 					// Verify dynamic relationships
 					resource.TestCheckResourceAttrPair(
 						"simplemdm_scriptjob.test_job", "script_id",
-						"data.simplemdm_script.fixture_script_updated", "id",
+						"simplemdm_script.test_script", "id",
 					),
 					resource.TestCheckResourceAttrPair(
 						"simplemdm_scriptjob.test_job", "group_ids.0",
-						"data.simplemdm_devicegroup.fixture_group_updated", "id",
+						"simplemdm_devicegroup.test_group", "id",
 					),
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "status"),
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "job_identifier"),

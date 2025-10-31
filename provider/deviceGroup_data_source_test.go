@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -10,18 +9,42 @@ import (
 func TestAccDeviceGroupDataSource(t *testing.T) {
 	testAccPreCheck(t)
 
-	groupID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_GROUP_ID")
-
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Read testing
+			// Create device group first
 			{
-				Config: providerConfig + fmt.Sprintf(`data "simplemdm_devicegroup" "test" {id ="%s"}`, groupID),
+				Config: providerConfig + `
+					resource "simplemdm_devicegroup" "test" {
+						name = "Test Data Source Device Group"
+					}
+				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify returned values
-					resource.TestCheckResourceAttr("data.simplemdm_devicegroup.test", "id", groupID),
-					resource.TestCheckResourceAttrSet("data.simplemdm_devicegroup.test", "name"),
+					resource.TestCheckResourceAttrSet("simplemdm_devicegroup.test", "id"),
+					resource.TestCheckResourceAttr("simplemdm_devicegroup.test", "name", "Test Data Source Device Group"),
+				),
+			},
+			// Then test reading it with data source
+			{
+				Config: providerConfig + `
+					resource "simplemdm_devicegroup" "test" {
+						name = "Test Data Source Device Group"
+					}
+
+					data "simplemdm_devicegroup" "test" {
+						id = simplemdm_devicegroup.test.id
+					}
+				`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Verify data source matches resource
+					resource.TestCheckResourceAttrPair(
+						"data.simplemdm_devicegroup.test", "id",
+						"simplemdm_devicegroup.test", "id",
+					),
+					resource.TestCheckResourceAttrPair(
+						"data.simplemdm_devicegroup.test", "name",
+						"simplemdm_devicegroup.test", "name",
+					),
 				),
 			},
 		},
