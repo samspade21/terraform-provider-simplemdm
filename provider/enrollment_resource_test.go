@@ -26,20 +26,22 @@ func TestAccEnrollmentResource(t *testing.T) {
 	steps := []resource.TestStep{
 		{
 			Config: providerConfig + `
-				# Create prerequisite device group
-				resource "simplemdm_devicegroup" "test_group" {
-					name = "Test Enrollment Device Group"
+				# Create prerequisite assignment group (device groups cannot be created via API)
+				resource "simplemdm_assignmentgroup" "test_group" {
+					name                  = "Test Enrollment Assignment Group"
+					auto_deploy_profiles  = false
+					auto_deploy_apps      = false
 				}
 
 				# Create enrollment using dynamic reference
 				resource "simplemdm_enrollment" "test" {
-					device_group_id    = simplemdm_devicegroup.test_group.id
+					device_group_id    = simplemdm_assignmentgroup.test_group.id
 					user_enrollment    = false
 					welcome_screen     = true
 					authentication     = false
 					invitation_contact = "` + invitationContact + `"
 
-					depends_on = [simplemdm_devicegroup.test_group]
+					depends_on = [simplemdm_assignmentgroup.test_group]
 				}
 			`,
 			Check: resource.ComposeAggregateTestCheckFunc(
@@ -50,7 +52,7 @@ func TestAccEnrollmentResource(t *testing.T) {
 				// Verify dynamic relationship
 				resource.TestCheckResourceAttrPair(
 					"simplemdm_enrollment.test", "device_group_id",
-					"simplemdm_devicegroup.test_group", "id",
+					"simplemdm_assignmentgroup.test_group", "id",
 				),
 				resource.TestCheckResourceAttrSet("simplemdm_enrollment.test", "id"),
 			),
@@ -69,26 +71,28 @@ func TestAccEnrollmentResource(t *testing.T) {
 	if updatedContact := os.Getenv("SIMPLEMDM_ENROLLMENT_CONTACT_UPDATE"); updatedContact != "" {
 		steps = append(steps, resource.TestStep{
 			Config: providerConfig + `
-				# Keep the same device group
-				resource "simplemdm_devicegroup" "test_group" {
-					name = "Test Enrollment Device Group"
+				# Keep the same assignment group
+				resource "simplemdm_assignmentgroup" "test_group" {
+					name                  = "Test Enrollment Assignment Group"
+					auto_deploy_profiles  = false
+					auto_deploy_apps      = false
 				}
 
 				# Update enrollment with new contact
 				resource "simplemdm_enrollment" "test" {
-					device_group_id    = simplemdm_devicegroup.test_group.id
+					device_group_id    = simplemdm_assignmentgroup.test_group.id
 					user_enrollment    = false
 					welcome_screen     = true
 					authentication     = false
 					invitation_contact = "` + updatedContact + `"
 
-					depends_on = [simplemdm_devicegroup.test_group]
+					depends_on = [simplemdm_assignmentgroup.test_group]
 				}
 			`,
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttrPair(
 					"simplemdm_enrollment.test", "device_group_id",
-					"simplemdm_devicegroup.test_group", "id",
+					"simplemdm_assignmentgroup.test_group", "id",
 				),
 				resource.TestCheckResourceAttr("simplemdm_enrollment.test", "invitation_contact", updatedContact),
 			),
@@ -98,19 +102,21 @@ func TestAccEnrollmentResource(t *testing.T) {
 	// Test removing the invitation contact
 	steps = append(steps, resource.TestStep{
 		Config: providerConfig + `
-			# Keep the same device group
-			resource "simplemdm_devicegroup" "test_group" {
-				name = "Test Enrollment Device Group"
+			# Keep the same assignment group
+			resource "simplemdm_assignmentgroup" "test_group" {
+				name                  = "Test Enrollment Assignment Group"
+				auto_deploy_profiles  = false
+				auto_deploy_apps      = false
 			}
 
 			# Remove invitation contact
 			resource "simplemdm_enrollment" "test" {
-				device_group_id = simplemdm_devicegroup.test_group.id
+				device_group_id = simplemdm_assignmentgroup.test_group.id
 				user_enrollment = false
 				welcome_screen  = true
 				authentication  = false
 
-				depends_on = [simplemdm_devicegroup.test_group]
+				depends_on = [simplemdm_assignmentgroup.test_group]
 			}
 		`,
 		Check: resource.ComposeAggregateTestCheckFunc(

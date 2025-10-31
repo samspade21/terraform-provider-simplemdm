@@ -33,16 +33,18 @@ func TestAccScriptJobResource(t *testing.T) {
 						variablesupport = true
 					}
 
-					# Create dynamic device group for testing
-					resource "simplemdm_devicegroup" "test_group" {
-						name = "Test Script Job Device Group"
+					# Create dynamic assignment group for testing (device groups cannot be created via API)
+					resource "simplemdm_assignmentgroup" "test_group" {
+						name                  = "Test Script Job Assignment Group"
+						auto_deploy_profiles  = false
+						auto_deploy_apps      = false
 					}
 
 					# Create script job using dynamic resources
 					resource "simplemdm_scriptjob" "test_job" {
 						script_id  = simplemdm_script.test_script.id
 						device_ids = []
-						group_ids  = [simplemdm_devicegroup.test_group.id]
+						group_ids  = [simplemdm_assignmentgroup.test_group.id]
 					}
 				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -56,7 +58,7 @@ func TestAccScriptJobResource(t *testing.T) {
 					),
 					resource.TestCheckResourceAttrPair(
 						"simplemdm_scriptjob.test_job", "group_ids.0",
-						"simplemdm_devicegroup.test_group", "id",
+						"simplemdm_assignmentgroup.test_group", "id",
 					),
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "job_identifier"),
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "status"),
@@ -81,16 +83,18 @@ func TestAccScriptJobResource(t *testing.T) {
 						variablesupport = true
 					}
 
-					# Keep the same device group
-					resource "simplemdm_devicegroup" "test_group" {
-						name = "Test Script Job Device Group"
+					# Keep the same assignment group
+					resource "simplemdm_assignmentgroup" "test_group" {
+						name                  = "Test Script Job Assignment Group"
+						auto_deploy_profiles  = false
+						auto_deploy_apps      = false
 					}
 
 					# Update script job with custom attributes
 					resource "simplemdm_scriptjob" "test_job" {
 						script_id              = simplemdm_script.test_script.id
 						device_ids             = []
-						group_ids              = [simplemdm_devicegroup.test_group.id]
+						group_ids              = [simplemdm_assignmentgroup.test_group.id]
 						custom_attribute       = "SomeAttribute"
 						custom_attribute_regex = ".*"
 					}
@@ -108,7 +112,7 @@ func TestAccScriptJobResource(t *testing.T) {
 					),
 					resource.TestCheckResourceAttrPair(
 						"simplemdm_scriptjob.test_job", "group_ids.0",
-						"simplemdm_devicegroup.test_group", "id",
+						"simplemdm_assignmentgroup.test_group", "id",
 					),
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "status"),
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "job_identifier"),

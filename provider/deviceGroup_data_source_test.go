@@ -9,42 +9,23 @@ import (
 func TestAccDeviceGroupDataSource(t *testing.T) {
 	testAccPreCheck(t)
 
+	// Device groups cannot be created via API - they must exist
+	// This test requires an existing device group ID
+	deviceGroupID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_GROUP_ID")
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Create device group first
+			// Read existing device group with data source
 			{
 				Config: providerConfig + `
-					resource "simplemdm_devicegroup" "test" {
-						name = "Test Data Source Device Group"
-					}
-				`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("simplemdm_devicegroup.test", "id"),
-					resource.TestCheckResourceAttr("simplemdm_devicegroup.test", "name", "Test Data Source Device Group"),
-				),
-			},
-			// Then test reading it with data source
-			{
-				Config: providerConfig + `
-					resource "simplemdm_devicegroup" "test" {
-						name = "Test Data Source Device Group"
-					}
-
 					data "simplemdm_devicegroup" "test" {
-						id = simplemdm_devicegroup.test.id
+						id = "` + deviceGroupID + `"
 					}
 				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify data source matches resource
-					resource.TestCheckResourceAttrPair(
-						"data.simplemdm_devicegroup.test", "id",
-						"simplemdm_devicegroup.test", "id",
-					),
-					resource.TestCheckResourceAttrPair(
-						"data.simplemdm_devicegroup.test", "name",
-						"simplemdm_devicegroup.test", "name",
-					),
+					resource.TestCheckResourceAttr("data.simplemdm_devicegroup.test", "id", deviceGroupID),
+					resource.TestCheckResourceAttrSet("data.simplemdm_devicegroup.test", "name"),
 				),
 			},
 		},

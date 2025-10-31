@@ -9,48 +9,22 @@ import (
 func TestAccCustomProfileDataSource(t *testing.T) {
 	testAccPreCheck(t)
 
+	// Use existing custom profile for data source test
+	// Creating and immediately reading causes API timing issues
+	customProfileID := testAccRequireEnv(t, "SIMPLEMDM_CUSTOM_PROFILE_ID")
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Create the profile first
+			// Read existing custom profile
 			{
 				Config: providerConfig + `
-					resource "simplemdm_customprofile" "fixture" {
-						name                   = "Test Data Source Profile"
-						mobileconfig           = file("./testfiles/testprofile.mobileconfig")
-						userscope              = true
-						attributesupport       = true
-						escapeattributes       = true
-						reinstallafterosupdate = true
-					}
-				`,
-				ExpectNonEmptyPlan: true,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrSet("simplemdm_customprofile.fixture", "id"),
-				),
-			},
-			// Then test reading it - giving API time to stabilize
-			{
-				Config: providerConfig + `
-					resource "simplemdm_customprofile" "fixture" {
-						name                   = "Test Data Source Profile"
-						mobileconfig           = file("./testfiles/testprofile.mobileconfig")
-						userscope              = true
-						attributesupport       = true
-						escapeattributes       = true
-						reinstallafterosupdate = true
-					}
-
 					data "simplemdm_customprofile" "test" {
-						id = simplemdm_customprofile.fixture.id
+						id = "` + customProfileID + `"
 					}
 				`,
-				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttrPair(
-						"data.simplemdm_customprofile.test", "id",
-						"simplemdm_customprofile.fixture", "id",
-					),
+					resource.TestCheckResourceAttr("data.simplemdm_customprofile.test", "id", customProfileID),
 					resource.TestCheckResourceAttrSet("data.simplemdm_customprofile.test", "name"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_customprofile.test", "mobileconfig"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_customprofile.test", "profileidentifier"),
