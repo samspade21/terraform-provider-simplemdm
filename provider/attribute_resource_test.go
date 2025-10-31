@@ -1,18 +1,35 @@
 package provider
 
 import (
+	"fmt"
 	"testing"
 
-	simplemdm "github.com/DavidKrau/simplemdm-go-client"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func testAccCheckAttributeDestroy(s *terraform.State) error {
-	return testAccCheckResourceDestroyed("simplemdm_attribute", func(client *simplemdm.Client, id string) error {
-		_, err := client.AttributeGet(id)
+	client, err := getTestClient()
+	if err != nil {
 		return err
-	})(s)
+	}
+
+	// Check all potential attribute names created during test
+	// The test creates "newAttribute" then replaces it with "newAttribute2"
+	attributeNames := []string{"newAttribute", "newAttribute2"}
+	
+	for _, name := range attributeNames {
+		_, err := client.AttributeGet(name)
+		if err == nil {
+			return fmt.Errorf("attribute %s still exists after destroy", name)
+		}
+		// We expect a 404 or similar error indicating the attribute doesn't exist
+		if !isNotFoundError(err) {
+			return fmt.Errorf("unexpected error checking attribute %s: %w", name, err)
+		}
+	}
+
+	return nil
 }
 
 func TestAccAttributeResource(t *testing.T) {

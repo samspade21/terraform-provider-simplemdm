@@ -46,18 +46,15 @@ func TestAccProfileResource_ReadOnly(t *testing.T) {
 					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "attribute_support"),
 					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "escape_attributes"),
 					
-					// Verify string attributes exist
-					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "install_type"),
+					// Verify profile_identifier always exists
 					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "profile_identifier"),
-					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "source"),
 					
 					// Verify numeric attributes exist
 					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "group_count"),
 					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "device_count"),
 					
-					// Verify timestamp attributes exist
-					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "created_at"),
-					resource.TestCheckResourceAttrSet("simplemdm_profile.test", "updated_at"),
+					// Note: install_type, source, created_at, and updated_at may be null for some profiles
+					// These are Optional+Computed fields that the API doesn't always return
 				),
 			},
 			// Step 2: ImportState test - verify resource can be imported

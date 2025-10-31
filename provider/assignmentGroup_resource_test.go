@@ -92,7 +92,6 @@ func TestAccAssignmentGroupResource(t *testing.T) {
 						name                  = "Test Assignment Group Resource"
 						auto_deploy           = false
 						group_type            = "standard"
-						install_type          = "managed"
 						priority              = 3
 						app_track_location    = false
 						apps                  = [data.simplemdm_app.fixture_app.id]
@@ -110,6 +109,7 @@ func TestAccAssignmentGroupResource(t *testing.T) {
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "priority", "3"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "app_track_location", "false"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "devices_remove_others", "true"),
+					// Note: install_type is not returned by API for standard groups, will be null
 					// Note: Due to API eventual consistency, profiles and apps counts may be 0 or 1
 					// Verify dynamic values have any value set in the state
 					resource.TestCheckResourceAttrSet("simplemdm_assignmentgroup.testgroup2", "id"),
