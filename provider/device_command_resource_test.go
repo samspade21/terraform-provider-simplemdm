@@ -139,9 +139,9 @@ resource "simplemdm_device_command" "test" {
   parameters = {
 `, deviceID, command)
 
-	for key, value := range params {
-		config += fmt.Sprintf(`    %s = "%s"%s`, key, value, "\n")
-	}
+        for key, value := range params {
+                config += fmt.Sprintf("    %s = %q\n", key, value)
+        }
 
 	config += `  }
 }
