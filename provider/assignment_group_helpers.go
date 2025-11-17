@@ -329,8 +329,16 @@ func updateAssignmentGroupObjects(
 	objectType string,
 	removeOthers bool,
 ) error {
-	if (stateObjects.IsNull() || stateObjects.IsUnknown()) && (planObjects.IsNull() || planObjects.IsUnknown()) {
+	// When the plan set is null or unknown, Terraform cannot determine a desired
+	// target state for the relationship. In these cases we must leave the
+	// existing assignments untouched and bail out early regardless of what the
+	// current state contains.
+	if planObjects.IsNull() || planObjects.IsUnknown() {
 		return nil
+	}
+
+	if stateObjects.IsNull() || stateObjects.IsUnknown() {
+		stateObjects = types.SetNull(types.StringType)
 	}
 
 	// Convert sets to string slices

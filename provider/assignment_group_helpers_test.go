@@ -52,3 +52,22 @@ func TestUpdateAssignmentGroupObjectsSkipsWhenNoData(t *testing.T) {
 		t.Fatalf("expected no error when sets are empty/unknown, got %v", err)
 	}
 }
+
+func TestUpdateAssignmentGroupObjectsSkipsWhenPlanUnknown(t *testing.T) {
+	state := types.SetValueMust(types.StringType, []attr.Value{
+		types.StringValue("123"),
+	})
+
+	err := updateAssignmentGroupObjects(
+		context.Background(),
+		nil,
+		"group-id",
+		state,
+		types.SetUnknown(types.StringType),
+		"apps",
+		false,
+	)
+	if err != nil {
+		t.Fatalf("expected no error when plan set is unknown, got %v", err)
+	}
+}
