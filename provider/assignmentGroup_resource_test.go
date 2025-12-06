@@ -175,8 +175,6 @@ func TestAccAssignmentGroupResource(t *testing.T) {
 func TestAccAssignmentGroupResource_Import(t *testing.T) {
 	testAccPreCheck(t)
 
-	assignmentGroupID := testAccRequireEnv(t, "SIMPLEMDM_ASSIGNMENT_GROUP_ID")
-
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
