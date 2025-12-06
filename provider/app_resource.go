@@ -27,13 +27,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-const (
-	errCreateApp = "Error creating app"
-	errReadApp   = "Error reading app"
-	errUpdateApp = "Error updating app"
-	errDeleteApp = "Error deleting app"
-)
-
 var (
 	_ resource.Resource                = &appResource{}
 	_ resource.ResourceWithConfigure   = &appResource{}
@@ -277,12 +270,12 @@ func newAppResourceModelFromAPI(ctx context.Context, app *appAPIResponse) (appRe
 	} else {
 		model.AppStoreId = types.StringNull()
 	}
-	
+
 	// DeployTo and Status are write-only parameters that API does not return
 	// Preserve from plan/state as they are not provided by API
 	model.DeployTo = types.StringValue("none")
 	model.Status = types.StringNull()
-	
+
 	// Validate bundle_identifier is present (should always be returned by API)
 	if app.Data.Attributes.BundleIdentifier == "" {
 		diags.AddWarning(
@@ -290,12 +283,12 @@ func newAppResourceModelFromAPI(ctx context.Context, app *appAPIResponse) (appRe
 			fmt.Sprintf("App %d returned by API without bundle_identifier", app.Data.ID),
 		)
 	}
-	
+
 	// Validate app_type is a known value
 	knownAppTypes := map[string]bool{
-		"app store":   true,
-		"enterprise":  true,
-		"custom b2b":  true,
+		"app store":  true,
+		"enterprise": true,
+		"custom b2b": true,
 	}
 	if app.Data.Attributes.AppType != "" && !knownAppTypes[app.Data.Attributes.AppType] {
 		diags.AddWarning(
@@ -303,7 +296,7 @@ func newAppResourceModelFromAPI(ctx context.Context, app *appAPIResponse) (appRe
 			fmt.Sprintf("App returned unexpected app_type: %s", app.Data.Attributes.AppType),
 		)
 	}
-	
+
 	// Validate platform_support is a known value
 	knownPlatforms := map[string]bool{
 		"iOS":   true,
@@ -363,7 +356,7 @@ func waitForProcessingComplete(ctx context.Context, client *simplemdm.Client, ap
 	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -372,16 +365,16 @@ func waitForProcessingComplete(ctx context.Context, client *simplemdm.Client, ap
 			if time.Now().After(deadline) {
 				return fmt.Errorf("timeout waiting for app processing to complete after %v", timeout)
 			}
-			
+
 			app, err := fetchApp(ctx, client, appID)
 			if err != nil {
 				return fmt.Errorf("error checking processing status: %w", err)
 			}
-			
+
 			if app.Data.Attributes.ProcessingStatus == "processed" {
 				return nil
 			}
-			
+
 			// If processing failed, return error
 			if app.Data.Attributes.ProcessingStatus == "failed" {
 				return fmt.Errorf("app processing failed")
