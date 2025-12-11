@@ -530,22 +530,6 @@ func updateDeviceGroupName(ctx context.Context, client *simplemdm.Client, groupI
 	return err
 }
 
-// cloneDeviceGroupResponse represents the actual API response structure for clone operations
-type cloneDeviceGroupResponse struct {
-	Data struct {
-		Type       string `json:"type"`
-		ID         int    `json:"id"`
-		Attributes struct {
-			Name string `json:"name"`
-		} `json:"attributes"`
-		Relationships struct {
-			Devices struct {
-				Data []interface{} `json:"data"`
-			} `json:"devices"`
-		} `json:"relationships"`
-	} `json:"data"`
-}
-
 func cloneDeviceGroup(ctx context.Context, client *simplemdm.Client, sourceID string) (*simplemdm.SimplemdmDefaultStruct, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("https://%s/api/v1/device_groups/%s/clone", client.HostName, sourceID), nil)
 	if err != nil {
@@ -557,22 +541,11 @@ func cloneDeviceGroup(ctx context.Context, client *simplemdm.Client, sourceID st
 		return nil, err
 	}
 
-	// Use the correct response structure that matches the API specification
-	var cloneResp cloneDeviceGroupResponse
-	if err := json.Unmarshal(body, &cloneResp); err != nil {
+	// Unmarshal directly into the simplemdm.SimplemdmDefaultStruct
+	var result simplemdm.SimplemdmDefaultStruct
+	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, err
 	}
 
-	// Convert to the expected structure
-	result := &simplemdm.SimplemdmDefaultStruct{
-		Data: simplemdm.SimplemdmDefault{
-			ID:   cloneResp.Data.ID,
-			Type: cloneResp.Data.Type,
-			Attributes: simplemdm.SimplemdmDefaultAttributes{
-				Name: cloneResp.Data.Attributes.Name,
-			},
-		},
-	}
-
-	return result, nil
+	return &result, nil
 }
