@@ -96,8 +96,10 @@ func TestAccCustomProfileResource(t *testing.T) {
 			// ImportState testing
 			{
 				PreConfig: func() {
-					// Increased wait time for eventual consistency
-					time.Sleep(5 * time.Second)
+					// Wait for eventual consistency - SimpleMDM API needs significant
+					// time to propagate custom profiles before they can be imported
+					// Final attempt with 10 seconds - if this fails, import test should be removed
+					time.Sleep(10 * time.Second)
 				},
 				ResourceName:            "simplemdm_customprofile.test",
 				ImportState:             true,
