@@ -28,7 +28,7 @@ output "secure_token_users" {
 ```terraform
 # Advanced Example - Query device users
 data "simplemdm_device_users" "device_users" {
-  device_id = "123456"  # Must be a macOS device
+  device_id = "123456" # Must be a macOS device
 }
 
 # Filter logged in users
@@ -73,15 +73,15 @@ output "user_info" {
 
 Read-Only:
 
-- `id` (String) User identifier.
-- `type` (String) User resource type.
-- `username` (String) Username of the account.
-- `full_name` (String) Full name of the user.
-- `uid` (Number) User ID (UID) of the account.
-- `user_guid` (String) User GUID of the account.
 - `data_quota` (Number) Data quota for the user in bytes.
-- `data_used` (Number) Data used by the user in bytes.
 - `data_to_sync` (Boolean) Whether the user has data to sync.
-- `secure_token` (Boolean) Whether the user has a secure token.
+- `data_used` (Number) Data used by the user in bytes.
+- `full_name` (String) Full name of the user.
+- `id` (String) User identifier.
 - `logged_in` (Boolean) Whether the user is currently logged in.
 - `mobile_account` (Boolean) Whether the user is a mobile account.
+- `secure_token` (Boolean) Whether the user has a secure token.
+- `type` (String) User resource type.
+- `uid` (Number) User ID (UID) of the account.
+- `user_guid` (String) User GUID of the account.
+- `username` (String) Username of the account.

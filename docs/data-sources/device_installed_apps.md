@@ -47,12 +47,12 @@ output "app_inventory" {
     app_details = [
       for app in data.simplemdm_device_installed_apps.device_apps.installed_apps :
       {
-        name            = app.name
-        identifier      = app.identifier
-        version         = app.version
-        managed         = app.managed
-        bundle_size     = app.bundle_size
-        discovered_at   = app.discovered_at
+        name          = app.name
+        identifier    = app.identifier
+        version       = app.version
+        managed       = app.managed
+        bundle_size   = app.bundle_size
+        discovered_at = app.discovered_at
       }
     ]
   }
@@ -75,14 +75,14 @@ output "app_inventory" {
 
 Read-Only:
 
-- `id` (String) Installed app identifier.
-- `type` (String) Installed app resource type.
-- `name` (String) Application name.
-- `identifier` (String) Application bundle identifier.
-- `version` (String) Application version.
-- `short_version` (String) Application short version string.
 - `bundle_size` (Number) Size of the application bundle in bytes.
-- `dynamic_size` (Number) Dynamic size of the application in bytes.
-- `managed` (Boolean) Whether the application is managed by SimpleMDM.
 - `discovered_at` (String) Timestamp when the application was first discovered.
+- `dynamic_size` (Number) Dynamic size of the application in bytes.
+- `id` (String) Installed app identifier.
+- `identifier` (String) Application bundle identifier.
 - `last_seen_at` (String) Timestamp when the application was last seen.
+- `managed` (Boolean) Whether the application is managed by SimpleMDM.
+- `name` (String) Application name.
+- `short_version` (String) Application short version string.
+- `type` (String) Installed app resource type.
+- `version` (String) Application version.

@@ -8,36 +8,38 @@ description: |-
 
 # simplemdm_devicegroup (Resource)
 
-⚠️ **DEPRECATED AND READ-ONLY**: Device Groups have been superseded by Assignment Groups in SimpleMDM.
-
-**IMPORTANT**: This resource is now **READ-ONLY**. Device groups **cannot be created** via the Terraform provider as the SimpleMDM API does not support device group creation. This resource can only be used to:
-- Import existing legacy device groups for read-only management
-- Manage profile and attribute assignments on existing legacy groups (using deprecated APIs)
-- Track state of legacy device groups
-
-**For all new functionality, please use the `simplemdm_assignmentgroup` resource instead.**
-
-## Limitations
-
-- ❌ **Cannot create** new device groups (API endpoint does not exist)
-- ❌ **Cannot update** device group names (API endpoint does not exist)
-- ❌ **Cannot delete** device groups (API endpoint does not exist - removal only affects Terraform state)
-- ⚠️ Profile/attribute assignments use deprecated APIs
+⚠️ DEPRECATED: Device Groups have been superseded by Assignment Groups in SimpleMDM. Please use the simplemdm_assignmentgroup resource instead. This resource is maintained for backward compatibility only. Device Group resource can be used to manage Device Group. Can be used together with Custom Profile(s), Attribute(s), Assignment Group(s) or Device Group(s) and set addition details regarding Device Group.
 
 ## Example Usage
 
 ```terraform
-# ⚠️ DEPRECATED: This resource is READ-ONLY and cannot create device groups
-# Device groups can only be imported if they already exist as legacy groups
+# ⚠️ DEPRECATED AND READ-ONLY: Device Groups cannot be created
+# This resource is READ-ONLY and can only import existing legacy device groups
+# Device groups CANNOT be created via Terraform (API does not support it)
 
-# Import an existing legacy device group (READ-ONLY)
+# IMPORTANT: This example will FAIL because device groups cannot be created
+# To use this resource, you must import an existing legacy device group:
 # terraform import simplemdm_devicegroup.legacy_group 123456
 
-# Recommended: Use Assignment Groups for new groups
-resource "simplemdm_assignmentgroup" "modern_group" {
-  name        = "Modern Group"
+# Example showing attempted creation (THIS WILL FAIL):
+# resource "simplemdm_devicegroup" "testgroup" {
+#   name       = "group2"
+#   clone_from = "123456"  # Clone is also not supported - no create API
+#   attributes = {
+#     "myattribute" = "attributevalue"
+#   }
+#   profiles       = [123456, 654321]
+#   customprofiles = [456123]
+# }
+# Error: Device Group Creation Not Supported
+# Device Groups are deprecated and cannot be created via the API.
+
+# Recommended: Use Assignment Groups for all new groups
+resource "simplemdm_assignmentgroup" "testgroup" {
+  name        = "group2"
   auto_deploy = true
   profiles    = [123456, 654321]
+  # Assignment groups provide full CRUD functionality
 }
 ```
 
@@ -61,14 +63,11 @@ resource "simplemdm_assignmentgroup" "modern_group" {
 
 ## Import
 
-Import is the **ONLY** way to use this resource, as device groups cannot be created via the API.
+Import is supported using the following syntax:
 
-The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used to import existing legacy device groups:
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Import a legacy device group by specifying the numeric identifier
-# Note: Only legacy device group IDs from migrated groups are supported
+# devicegroup can be imported by specifying the numeric identifier.
 terraform import simplemdm_devicegroup.example 123456
 ```
-
-**Important**: After importing, this resource provides read-only access to the device group. Name changes and deletion operations are not supported via the API.

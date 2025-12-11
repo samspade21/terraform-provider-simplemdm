@@ -70,9 +70,9 @@ output "profile_audit" {
 
 Read-Only:
 
+- `attribute_support` (Boolean) Whether the profile supports custom attributes.
 - `id` (String) Profile identifier.
-- `type` (String) Profile resource type.
 - `name` (String) Profile name.
 - `profile_identifier` (String) Profile identifier string from the configuration profile.
+- `type` (String) Profile resource type.
 - `user_scope` (Boolean) Whether the profile is user-scoped.
-- `attribute_support` (Boolean) Whether the profile supports custom attributes.

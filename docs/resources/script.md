@@ -45,8 +45,8 @@ output "script_id" {
 
 ### Required
 
-- `name` (String) Required. A name for the Script. Example: "My First Script managed by terraform"
 - `content` (String) Required. The script content. Must begin with a valid shebang (e.g., #!/bin/sh). Can be loaded from a file using the file() or templatefile() functions. Example: content = file("./scripts/script.sh")
+- `name` (String) Required. A name for the Script. Example: "My First Script managed by terraform"
 
 ### Optional
 

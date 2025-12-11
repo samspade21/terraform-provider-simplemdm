@@ -8,9 +8,7 @@ description: |-
 
 # simplemdm_devicegroups (Data Source)
 
-⚠️ **DEPRECATED**: Device Groups have been superseded by Assignment Groups in SimpleMDM. Please use the `simplemdm_assignmentgroups` data source instead.
-
-**Note**: This data source only returns **legacy device groups** that were migrated from the old system. For modern group functionality, use Assignment Groups.
+⚠️ DEPRECATED: Device Groups have been superseded by Assignment Groups in SimpleMDM. Please use the simplemdm_assignmentgroups data source instead. This data source is maintained for backward compatibility only. Fetches the collection of device groups from your SimpleMDM account.
 
 ## Example Usage
 

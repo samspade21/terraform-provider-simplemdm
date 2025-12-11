@@ -19,12 +19,12 @@ output "app_inventory" {
     app_details = [
       for app in data.simplemdm_device_installed_apps.device_apps.installed_apps :
       {
-        name            = app.name
-        identifier      = app.identifier
-        version         = app.version
-        managed         = app.managed
-        bundle_size     = app.bundle_size
-        discovered_at   = app.discovered_at
+        name          = app.name
+        identifier    = app.identifier
+        version       = app.version
+        managed       = app.managed
+        bundle_size   = app.bundle_size
+        discovered_at = app.discovered_at
       }
     ]
   }

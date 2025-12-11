@@ -8,9 +8,7 @@ description: |-
 
 # simplemdm_devicegroup (Data Source)
 
-⚠️ **DEPRECATED**: Device Groups have been superseded by Assignment Groups in SimpleMDM. Please use the `simplemdm_assignmentgroup` data source instead.
-
-**Note**: This data source only works with **legacy device group IDs** from groups that were migrated from the old system. New groups should use Assignment Groups.
+⚠️ DEPRECATED: Device Groups have been superseded by Assignment Groups in SimpleMDM. Please use the simplemdm_assignmentgroup data source instead. This data source is maintained for backward compatibility only. Device Group data source can be used together with Assignment Group(s) to assign group(s) to these objects.
 
 ## Example Usage
 
@@ -18,9 +16,10 @@ description: |-
 # ⚠️ DEPRECATED: Device Groups have been superseded by Assignment Groups in SimpleMDM
 # This data source only works with legacy device group IDs
 # Please use simplemdm_assignmentgroup data source instead
+# This example is maintained for backward compatibility only
 
 data "simplemdm_devicegroup" "legacy_devicegroup" {
-  id = "123456"  # Must be a legacy device group ID
+  id = "123456" # Must be a legacy device group ID from a migrated group
 }
 
 # Recommended: Use Assignment Groups instead
@@ -35,7 +34,7 @@ data "simplemdm_assignmentgroup" "modern_group" {
 # Use simplemdm_assignmentgroup for modern groups
 
 data "simplemdm_devicegroup" "legacy_group" {
-  id = "123456"  # Must be a legacy device group ID
+  id = "123456" # Must be a legacy device group ID
 }
 
 output "device_group_info" {
@@ -65,7 +64,7 @@ output "modern_group_info" {
 
 ### Required
 
-- `id` (String) ID of a Device Group in SimpleMDM. **Note**: Only legacy device group IDs from migrated groups are supported.
+- `id` (String) ID of a Device Group in SimpleMDM.
 
 ### Read-Only
 

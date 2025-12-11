@@ -7,8 +7,8 @@ resource "simplemdm_customdeclaration" "example" {
   activation_predicate      = "TRUEPREDICATE"
   reinstall_after_os_update = false
   payload = jsonencode({
-    Type       = "com.apple.configuration.management.status-subscriptions"
-    Identifier = "com.example.terraform.status"
+    Type        = "com.apple.configuration.management.status-subscriptions"
+    Identifier  = "com.example.terraform.status"
     ServerToken = "example-token"
     StatusItems = [
       {
