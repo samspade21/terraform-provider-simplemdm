@@ -28,7 +28,7 @@ func TestAccManagedConfigsDataSource_basic(t *testing.T) {
                                 resource "simplemdm_managed_config" "config2" {
                                         app_id     = simplemdm_app.testapp.id
                                         key        = "debug_mode"
-                                        value      = "false"
+                                        value      = "0"
                                         value_type = "boolean"
                                 }
 
