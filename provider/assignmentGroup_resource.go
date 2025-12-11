@@ -108,6 +108,7 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+					&useConfigForDeprecatedGroupType{},
 				},
 				Description: "Optional. Type of assignment group. Must be one of standard (for MDM app/media deployments) or munki for Munki app deployments. Defaults to standard. " +
 					"⚠️ DEPRECATED: This field is deprecated by the SimpleMDM API and may be ignored for accounts using the New Groups Experience.",
