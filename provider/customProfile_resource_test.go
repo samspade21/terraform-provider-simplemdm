@@ -68,7 +68,7 @@ func TestAccCustomProfileResource(t *testing.T) {
 				Config: providerConfig + `
 		resource "simplemdm_customprofile" "test" {
 			name= "testprofile"
-			mobileconfig = file("./testfiles/testprofile.mobileconfig")
+			mobileconfig = file("./testfiles/firewall-test-profile.mobileconfig")
 			user_scope = true
 			attribute_support = true
 			escape_attributes = true
@@ -80,7 +80,7 @@ func TestAccCustomProfileResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify attributes
 					resource.TestCheckResourceAttr("simplemdm_customprofile.test", "name", "testprofile"),
-					resource.TestCheckResourceAttr("simplemdm_customprofile.test", "mobileconfig", "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n    <key>PayloadContent</key>\n    <array>\n        <dict>\n            <key>stickyKey</key>\n            <true/>\n            <key>PayloadIdentifier</key>\n            <string>com.example.myaccessibilitypayload</string>\n            <key>PayloadType</key>\n            <string>com.apple.universalaccess</string>\n            <key>PayloadUUID</key>\n            <string>bff2939d-cb4c-4f6d-8521-e26bc7c03e96</string>\n            <key>PayloadVersion</key>\n            <integer>1</integer>\n            <key>mouseDriverCursorSize</key>\n            <integer>3</integer>\n        </dict>\n    </array>\n    <key>PayloadDisplayName</key>\n    <string>Accessibility</string>\n    <key>PayloadIdentifier</key>\n    <string>com.example.myprofile</string>\n    <key>PayloadType</key>\n    <string>Configuration</string>\n    <key>PayloadUUID</key>\n    <string>e7b55cc7-0d94-4045-8868-dcc1b1c58159</string>\n    <key>PayloadVersion</key>\n    <integer>1</integer>\n</dict>\n</plist>"),
+					resource.TestCheckResourceAttr("simplemdm_customprofile.test", "mobileconfig", "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>PayloadContent</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>AllowSigned</key>\n\t\t\t<true/>\n\t\t\t<key>AllowSignedApp</key>\n\t\t\t<true/>\n\t\t\t<key>EnableFirewall</key>\n\t\t\t<true/>\n\t\t\t<key>PayloadDisplayName</key>\n\t\t\t<string>Firewall #1</string>\n\t\t\t<key>PayloadIdentifier</key>\n\t\t\t<string>com.apple.security.firewall.D1FA5F53-E297-4123-A7DF-611FBC2D5343</string>\n\t\t\t<key>PayloadType</key>\n\t\t\t<string>com.apple.security.firewall</string>\n\t\t\t<key>PayloadUUID</key>\n\t\t\t<string>D1FA5F53-E297-4123-A7DF-611FBC2D5343</string>\n\t\t\t<key>PayloadVersion</key>\n\t\t\t<integer>1</integer>\n\t\t</dict>\n\t</array>\n\t<key>PayloadDisplayName</key>\n\t<string>Firewall</string>\n\t<key>PayloadIdentifier</key>\n\t<string>com.example.test.DCB16055-C962-4283-9BA8-7C2B2E1F8583</string>\n\t<key>PayloadOrganization</key>\n\t<string>Test Organization</string>\n\t<key>PayloadScope</key>\n\t<string>System</string>\n\t<key>PayloadType</key>\n\t<string>Configuration</string>\n\t<key>PayloadUUID</key>\n\t<string>DCB16055-C962-4283-9BA8-7C2B2E1F8583</string>\n\t<key>PayloadVersion</key>\n\t<integer>1</integer>\n\t<key>TargetDeviceType</key>\n\t<integer>5</integer>\n</dict>\n</plist>"),
 					resource.TestCheckResourceAttr("simplemdm_customprofile.test", "user_scope", "true"),
 					resource.TestCheckResourceAttr("simplemdm_customprofile.test", "attribute_support", "true"),
 					resource.TestCheckResourceAttr("simplemdm_customprofile.test", "escape_attributes", "true"),
@@ -96,8 +96,8 @@ func TestAccCustomProfileResource(t *testing.T) {
 			// ImportState testing
 			{
 				PreConfig: func() {
-					// Wait for eventual consistency - custom profile needs time to propagate
-					time.Sleep(2 * time.Second)
+					// Increased wait time for eventual consistency
+					time.Sleep(5 * time.Second)
 				},
 				ResourceName:            "simplemdm_customprofile.test",
 				ImportState:             true,
