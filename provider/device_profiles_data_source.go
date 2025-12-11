@@ -37,12 +37,6 @@ type deviceProfileDataSourceModel struct {
 	AttributeSupport types.Bool   `tfsdk:"attribute_support"`
 }
 
-type deviceRelatedItemDataSourceModel struct {
-	ID             types.String `tfsdk:"id"`
-	Type           types.String `tfsdk:"type"`
-	AttributesJSON types.String `tfsdk:"attributes_json"`
-}
-
 func DeviceProfilesDataSource() datasource.DataSource {
 	return &deviceProfilesDataSource{}
 }
