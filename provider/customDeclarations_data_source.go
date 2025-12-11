@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
+	"strings"
 
 	"github.com/DavidKrau/simplemdm-go-client"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -139,11 +139,11 @@ func (d *customDeclarationsDataSource) Read(ctx context.Context, req datasource.
 	entries := make([]customDeclarationsDataSourceDeclarationModel, 0, len(declarations))
 	for _, decl := range declarations {
 		entry := customDeclarationsDataSourceDeclarationModel{
-			ID:                     types.StringValue(decl.ID),
-			Name:                   types.StringValue(decl.Attributes.Name),
-			DeclarationType:        types.StringValue(decl.Attributes.DeclarationType),
-			ActivationPredicate:    stringValueOrNull(decl.Attributes.ActivationPredicate),
-			ProfileIdentifier:      stringValueOrNull(decl.Attributes.ProfileIdentifier),
+			ID:                  types.StringValue(decl.ID),
+			Name:                types.StringValue(decl.Attributes.Name),
+			DeclarationType:     types.StringValue(decl.Attributes.DeclarationType),
+			ActivationPredicate: stringValueOrNull(decl.Attributes.ActivationPredicate),
+			ProfileIdentifier:   stringValueOrNull(decl.Attributes.ProfileIdentifier),
 		}
 
 		if decl.Attributes.UserScope != nil {

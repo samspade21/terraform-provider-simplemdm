@@ -241,8 +241,10 @@ func (r *customDeclarationResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 
+	bodyBytes := body.Bytes()
+
 	url := fmt.Sprintf("https://%s/api/v1/custom_declarations", r.client.HostName)
-	httpReq, err := http.NewRequest(http.MethodPost, url, &body)
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating SimpleMDM custom declaration request", err.Error())
 		return
@@ -254,7 +256,7 @@ func (r *customDeclarationResource) Create(ctx context.Context, req resource.Cre
 	if err != nil {
 		// Try 201 if 200 failed
 		if strings.Contains(err.Error(), "200") {
-			httpReq2, _ := http.NewRequest(http.MethodPost, url, &body)
+			httpReq2, _ := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
 			httpReq2.Header.Set("Content-Type", writer.FormDataContentType())
 			responseBody, err = r.client.RequestResponse201(httpReq2)
 		}
