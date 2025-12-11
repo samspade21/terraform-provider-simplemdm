@@ -13,15 +13,12 @@ func TestNewAppResourceModelFromAPI_AllFields(t *testing.T) {
 	response.Data.ID = 42
 	response.Data.Attributes.Name = "Marketing App"
 	response.Data.Attributes.BundleIdentifier = "com.example.marketing"
-	itunesID := 123456789
-	response.Data.Attributes.ITunesStoreID = &itunesID
+	response.Data.Attributes.ITunesStoreID = 123456789
 	response.Data.Attributes.AppType = "app store"
 	response.Data.Attributes.InstallationChannels = []string{"assignment_groups"}
 	response.Data.Attributes.PlatformSupport = "ios"
 	response.Data.Attributes.ProcessingStatus = "ready"
 	response.Data.Attributes.Version = "7.1"
-	response.Data.Attributes.DeployTo = "outdated"
-	response.Data.Attributes.Status = "deployed"
 	response.Data.Attributes.CreatedAt = "2025-01-02T03:04:05Z"
 	response.Data.Attributes.UpdatedAt = "2025-02-03T04:05:06Z"
 
@@ -42,11 +39,13 @@ func TestNewAppResourceModelFromAPI_AllFields(t *testing.T) {
 	if model.BundleId.ValueString() != "com.example.marketing" {
 		t.Fatalf("expected BundleId to be set")
 	}
-	if model.DeployTo.ValueString() != "outdated" {
-		t.Fatalf("expected DeployTo to be set")
+	// DeployTo and Status are write-only fields not returned by API
+	// They should have their default/null values
+	if model.DeployTo.ValueString() != "none" {
+		t.Fatalf("expected DeployTo to have default value 'none', got %q", model.DeployTo.ValueString())
 	}
-	if model.Status.ValueString() != "deployed" {
-		t.Fatalf("expected Status to be set")
+	if !model.Status.IsNull() {
+		t.Fatalf("expected Status to be null (not returned by API), got %q", model.Status.ValueString())
 	}
 	if model.AppType.ValueString() != "app store" {
 		t.Fatalf("expected AppType to be set")
