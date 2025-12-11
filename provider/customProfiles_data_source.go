@@ -23,19 +23,20 @@ type customProfilesDataSource struct {
 }
 
 type customProfilesDataSourceModel struct {
+	Search         types.String                           `tfsdk:"search"`
 	CustomProfiles []customProfilesDataSourceProfileModel `tfsdk:"custom_profiles"`
 }
 
 type customProfilesDataSourceProfileModel struct {
 	ID                     types.String `tfsdk:"id"`
 	Name                   types.String `tfsdk:"name"`
-	UserScope              types.Bool   `tfsdk:"userscope"`
-	AttributeSupport       types.Bool   `tfsdk:"attributesupport"`
-	EscapeAttributes       types.Bool   `tfsdk:"escapeattributes"`
-	ReinstallAfterOSUpdate types.Bool   `tfsdk:"reinstallafterosupdate"`
-	ProfileIdentifier      types.String `tfsdk:"profileidentifier"`
-	GroupCount             types.Int64  `tfsdk:"groupcount"`
-	DeviceCount            types.Int64  `tfsdk:"devicecount"`
+	UserScope              types.Bool   `tfsdk:"user_scope"`
+	AttributeSupport       types.Bool   `tfsdk:"attribute_support"`
+	EscapeAttributes       types.Bool   `tfsdk:"escape_attributes"`
+	ReinstallAfterOSUpdate types.Bool   `tfsdk:"reinstall_after_os_update"`
+	ProfileIdentifier      types.String `tfsdk:"profile_identifier"`
+	GroupCount             types.Int64  `tfsdk:"group_count"`
+	DeviceCount            types.Int64  `tfsdk:"device_count"`
 }
 
 func CustomProfilesDataSource() datasource.DataSource {
@@ -49,6 +50,12 @@ func (d *customProfilesDataSource) Metadata(_ context.Context, req datasource.Me
 func (d *customProfilesDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Fetches the collection of custom configuration profiles from your SimpleMDM account.",
+		Attributes: map[string]schema.Attribute{
+			"search": schema.StringAttribute{
+				Optional:    true,
+				Description: "Filter profiles by name (optional).",
+			},
+		},
 		Blocks: map[string]schema.Block{
 			"custom_profiles": schema.ListNestedBlock{
 				Description: "Collection of custom profile records returned by the API.",
@@ -62,31 +69,31 @@ func (d *customProfilesDataSource) Schema(_ context.Context, _ datasource.Schema
 							Computed:    true,
 							Description: "The name of the custom profile.",
 						},
-						"userscope": schema.BoolAttribute{
+						"user_scope": schema.BoolAttribute{
 							Computed:    true,
 							Description: "Whether the profile deploys as a user profile for macOS devices.",
 						},
-						"attributesupport": schema.BoolAttribute{
+						"attribute_support": schema.BoolAttribute{
 							Computed:    true,
 							Description: "Indicates whether variable substitution is enabled for the profile.",
 						},
-						"escapeattributes": schema.BoolAttribute{
+						"escape_attributes": schema.BoolAttribute{
 							Computed:    true,
 							Description: "Indicates whether custom attribute values are escaped when substituted into the profile.",
 						},
-						"reinstallafterosupdate": schema.BoolAttribute{
+						"reinstall_after_os_update": schema.BoolAttribute{
 							Computed:    true,
 							Description: "Whether the profile reinstalls automatically after macOS updates.",
 						},
-						"profileidentifier": schema.StringAttribute{
+						"profile_identifier": schema.StringAttribute{
 							Computed:    true,
 							Description: "Profile identifier assigned by SimpleMDM.",
 						},
-						"groupcount": schema.Int64Attribute{
+						"group_count": schema.Int64Attribute{
 							Computed:    true,
 							Description: "Number of device groups currently assigned to this profile.",
 						},
-						"devicecount": schema.Int64Attribute{
+						"device_count": schema.Int64Attribute{
 							Computed:    true,
 							Description: "Number of devices currently assigned to this profile.",
 						},
@@ -105,7 +112,7 @@ func (d *customProfilesDataSource) Read(ctx context.Context, req datasource.Read
 		return
 	}
 
-	customProfiles, err := fetchAllCustomProfiles(ctx, d.client)
+	customProfiles, err := fetchAllCustomProfiles(ctx, d.client, config.Search.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to list SimpleMDM custom profiles",
@@ -156,15 +163,19 @@ func (d *customProfilesDataSource) Configure(_ context.Context, req datasource.C
 }
 
 // fetchAllCustomProfiles retrieves all custom profiles with pagination support
-func fetchAllCustomProfiles(ctx context.Context, client *simplemdm.Client) ([]customProfileData, error) {
+func fetchAllCustomProfiles(ctx context.Context, client *simplemdm.Client, search string) ([]customProfileData, error) {
 	var allProfiles []customProfileData
 	startingAfter := 0
 	limit := 100
 
 	for {
-		url := fmt.Sprintf("https://%s/api/v1/custom_profiles?limit=%d", client.HostName, limit)
+		// Use correct API endpoint: /api/v1/custom_configuration_profiles
+		url := fmt.Sprintf("https://%s/api/v1/custom_configuration_profiles?limit=%d", client.HostName, limit)
 		if startingAfter > 0 {
 			url += fmt.Sprintf("&starting_after=%d", startingAfter)
+		}
+		if search != "" {
+			url += fmt.Sprintf("&search=%s", search)
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

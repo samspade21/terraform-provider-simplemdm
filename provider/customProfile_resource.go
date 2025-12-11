@@ -26,14 +26,14 @@ var (
 type customProfileResourceModel struct {
 	Name                   types.String `tfsdk:"name"`
 	MobileConfig           types.String `tfsdk:"mobileconfig"`
-	UserScope              types.Bool   `tfsdk:"userscope"`
-	AttributeSupport       types.Bool   `tfsdk:"attributesupport"`
-	EscapeAttributes       types.Bool   `tfsdk:"escapeattributes"`
-	ReinstallAfterOSUpdate types.Bool   `tfsdk:"reinstallafterosupdate"`
-	ProfileIdentifier      types.String `tfsdk:"profileidentifier"`
-	GroupCount             types.Int64  `tfsdk:"groupcount"`
-	DeviceCount            types.Int64  `tfsdk:"devicecount"`
-	ProfileSHA             types.String `tfsdk:"profilesha"`
+	UserScope              types.Bool   `tfsdk:"user_scope"`
+	AttributeSupport       types.Bool   `tfsdk:"attribute_support"`
+	EscapeAttributes       types.Bool   `tfsdk:"escape_attributes"`
+	ReinstallAfterOSUpdate types.Bool   `tfsdk:"reinstall_after_os_update"`
+	ProfileIdentifier      types.String `tfsdk:"profile_identifier"`
+	GroupCount             types.Int64  `tfsdk:"group_count"`
+	DeviceCount            types.Int64  `tfsdk:"device_count"`
+	ProfileSHA             types.String `tfsdk:"profile_sha"`
 	ID                     types.String `tfsdk:"id"`
 }
 
@@ -83,43 +83,43 @@ func (r *customProfileResource) Schema(_ context.Context, _ resource.SchemaReque
 				},
 				Description: "ID of a Custom Configuration Profile in SimpleMDM",
 			},
-			"userscope": schema.BoolAttribute{
+			"user_scope": schema.BoolAttribute{
 				Optional:    true,
 				Default:     booldefault.StaticBool(true),
 				Computed:    true,
 				Description: "Optional. A boolean true or false. If false, deploy as a device profile instead of a user profile for macOS devices. Defaults to true.",
 			},
-			"attributesupport": schema.BoolAttribute{
+			"attribute_support": schema.BoolAttribute{
 				Optional:    true,
 				Default:     booldefault.StaticBool(false),
 				Computed:    true,
 				Description: "Optional. A boolean true or false. When enabled, SimpleMDM will process variables in the uploaded profile. Defaults to false",
 			},
-			"escapeattributes": schema.BoolAttribute{
+			"escape_attributes": schema.BoolAttribute{
 				Optional:    true,
 				Default:     booldefault.StaticBool(false),
 				Computed:    true,
 				Description: "Optional. A boolean true or false. When enabled, SimpleMDM escape the values of the custom variables in the uploaded profile. Defaults to false",
 			},
-			"reinstallafterosupdate": schema.BoolAttribute{
+			"reinstall_after_os_update": schema.BoolAttribute{
 				Optional:    true,
 				Default:     booldefault.StaticBool(false),
 				Computed:    true,
 				Description: "Optional. A boolean true or false. When enabled, SimpleMDM will re-install the profile automatically after macOS software updates are detected. Defaults to false",
 			},
-			"profileidentifier": schema.StringAttribute{
+			"profile_identifier": schema.StringAttribute{
 				Computed:    true,
 				Description: "Read-only profile identifier assigned by SimpleMDM.",
 			},
-			"groupcount": schema.Int64Attribute{
+			"group_count": schema.Int64Attribute{
 				Computed:    true,
 				Description: "Number of device groups assigned to this custom configuration profile.",
 			},
-			"devicecount": schema.Int64Attribute{
+			"device_count": schema.Int64Attribute{
 				Computed:    true,
 				Description: "Number of devices assigned to this custom configuration profile.",
 			},
-			"profilesha": schema.StringAttribute{
+			"profile_sha": schema.StringAttribute{
 				Computed:    true,
 				Description: "SHA-256 checksum reported by SimpleMDM for the current mobileconfig payload.",
 			},
@@ -146,8 +146,8 @@ func (r *customProfileResource) Create(ctx context.Context, req resource.CreateR
 	Profile, err := r.client.CustomProfileCreate(plan.Name.ValueString(), plan.MobileConfig.ValueString(), plan.UserScope.ValueBool(), plan.AttributeSupport.ValueBool(), plan.EscapeAttributes.ValueBool(), plan.ReinstallAfterOSUpdate.ValueBool())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error creating profile",
-			"Could not create profile, unexpected error: "+err.Error(),
+			"Error creating SimpleMDM custom profile",
+			"Could not create custom profile: "+err.Error(),
 		)
 		return
 	}
@@ -159,8 +159,8 @@ func (r *customProfileResource) Create(ctx context.Context, req resource.CreateR
 	sha, body, err := r.client.CustomProfileSHA(plan.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error Reading SimpleMDM custom profile",
-			"Could not read custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
+			"Error reading SimpleMDM custom profile",
+			"Could not download custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
 		)
 		return
 	}
@@ -185,6 +185,8 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
+	// NOTE: CustomProfileGet uses GET /api/v1/custom_configuration_profiles/{id}
+	// This endpoint is not documented in the API specification but is functional.
 	profile, err := r.client.CustomProfileGet(state.ID.ValueString())
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
@@ -193,7 +195,7 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 		}
 
 		resp.Diagnostics.AddError(
-			"Error Reading SimpleMDM custom profile",
+			"Error reading SimpleMDM custom profile",
 			"Could not read custom profile ID "+state.ID.ValueString()+": "+err.Error(),
 		)
 		return
@@ -202,6 +204,8 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 	assignCustomProfileAttributes(&state, profile.Data.Attributes)
 	state.ID = types.StringValue(strconv.Itoa(profile.Data.ID))
 
+	// NOTE: CustomProfileSHA downloads the profile using GET /api/v1/custom_configuration_profiles/{id}/download
+	// and computes the SHA-256 checksum locally. The 'profile_sha' field is not returned by the API.
 	sha, body, err := r.client.CustomProfileSHA(state.ID.ValueString())
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
@@ -210,7 +214,7 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 		}
 
 		resp.Diagnostics.AddError(
-			"Error Reading SimpleMDM custom profile",
+			"Error reading SimpleMDM custom profile",
 			"Could not download custom profile ID "+state.ID.ValueString()+": "+err.Error(),
 		)
 		return
@@ -237,11 +241,12 @@ func (r *customProfileResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	// Generate API request body from plan
+	// NOTE: The 7th parameter (empty string) is a search parameter not used for single profile updates
 	_, err := r.client.CustomProfileUpdate(plan.Name.ValueString(), plan.MobileConfig.ValueString(), plan.UserScope.ValueBool(), plan.AttributeSupport.ValueBool(), plan.EscapeAttributes.ValueBool(), plan.ReinstallAfterOSUpdate.ValueBool(), "", plan.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error updating profile",
-			"Could not update profile, unexpected error: "+err.Error(),
+			"Error updating SimpleMDM custom profile",
+			"Could not update custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
 		)
 		return
 	}
@@ -254,7 +259,7 @@ func (r *customProfileResource) Update(ctx context.Context, req resource.UpdateR
 		}
 
 		resp.Diagnostics.AddError(
-			"Error Reading SimpleMDM custom profile",
+			"Error reading SimpleMDM custom profile",
 			"Could not read custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
 		)
 		return
@@ -270,7 +275,7 @@ func (r *customProfileResource) Update(ctx context.Context, req resource.UpdateR
 		}
 
 		resp.Diagnostics.AddError(
-			"Error Reading SimpleMDM custom profile",
+			"Error reading SimpleMDM custom profile",
 			"Could not download custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
 		)
 		return
@@ -298,8 +303,8 @@ func (r *customProfileResource) Delete(ctx context.Context, req resource.DeleteR
 	err := r.client.CustomProfileDelete(state.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error Deleting SimpleMDM custom profile",
-			"Could not delete custom profile, unexpected error: "+err.Error(),
+			"Error deleting SimpleMDM custom profile",
+			"Could not delete custom profile ID "+state.ID.ValueString()+": "+err.Error(),
 		)
 		return
 	}
