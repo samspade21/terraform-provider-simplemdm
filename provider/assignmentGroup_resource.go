@@ -121,6 +121,8 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
+					&useConfigForDeprecatedGroupType{},
 				},
 				Description: "Optional. The install type for munki assignment groups. Must be one of managed, self_serve, managed_updates or default_installs. This setting has no effect for non-munki (standard) assignment groups. Defaults to managed for munki groups. " +
 					"⚠️ DEPRECATED: The SimpleMDM API recommends setting install_type per-app using the Assign App endpoint instead of at the group level.",
@@ -206,6 +208,41 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 			},
 		},
 	}
+}
+
+// useConfigForDeprecatedGroupType is a plan modifier that preserves the config value
+// for the deprecated group_type field. The SimpleMDM API may return different values
+// (e.g., "static") for accounts using the New Groups Experience, but we want to
+// maintain the user's configured value to avoid spurious diffs.
+type useConfigForDeprecatedGroupType struct{}
+
+func (m *useConfigForDeprecatedGroupType) Description(ctx context.Context) string {
+	return "Preserves configured group_type value even if API returns different value for this deprecated field"
+}
+
+func (m *useConfigForDeprecatedGroupType) MarkdownDescription(ctx context.Context) string {
+	return "Preserves configured group_type value even if API returns different value for this deprecated field"
+}
+
+func (m *useConfigForDeprecatedGroupType) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// If this is a new resource (no state), let the default/config value flow through
+	if req.State.Raw.IsNull() {
+		return
+	}
+
+	// If config is null/unknown, use state value
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+
+	// If state is null/unknown, use config value
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+		return
+	}
+
+	// For this deprecated field, always preserve the config value
+	// This prevents API differences (e.g., "static" vs "standard") from causing drift
+	resp.PlanValue = req.ConfigValue
 }
 
 // syncProfilesWithRetry handles profile sync with rate limit retry logic
