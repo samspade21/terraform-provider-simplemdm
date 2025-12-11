@@ -193,7 +193,7 @@ func TestAccAssignmentGroupResource_Import(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{
-					"apps_update", "apps_push", "profiles_sync", "devices_remove_others",
+					"apps_update", "apps_push", "profiles_sync", "devices_remove_others", "group_type",
 				},
 			},
 		},
