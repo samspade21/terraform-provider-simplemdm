@@ -1,18 +1,59 @@
 package provider
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
-	simplemdm "github.com/DavidKrau/simplemdm-go-client"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func testAccCheckCustomProfileDestroy(s *terraform.State) error {
-	return testAccCheckResourceDestroyed("simplemdm_customprofile", func(client *simplemdm.Client, id string) error {
-		_, err := client.CustomProfileGet(id)
+	client, err := getTestClient()
+	if err != nil {
 		return err
-	})(s)
+	}
+
+	// Check all custom profile resources in the state
+	for _, rs := range s.RootModule().Resources {
+		if rs.Type != "simplemdm_customprofile" {
+			continue
+		}
+
+		// The custom profile ID
+		profileID := rs.Primary.ID
+
+		// Try to fetch the resource with retry for eventual consistency
+		// SimpleMDM API may take time to fully delete custom profiles
+		var lastErr error
+		maxRetries := 6
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			_, lastErr = client.CustomProfileGet(profileID)
+
+			// If we get a 404, the resource is properly deleted
+			if lastErr != nil && isNotFoundError(lastErr) {
+				break
+			}
+
+			// If the resource still exists after all attempts, it wasn't deleted
+			if lastErr == nil && attempt == maxRetries-1 {
+				return fmt.Errorf("custom profile %s still exists after destroy", profileID)
+			}
+
+			// Wait before retrying (only if not last attempt)
+			if attempt < maxRetries-1 && lastErr == nil {
+				time.Sleep(time.Second * time.Duration(attempt+1))
+			}
+		}
+
+		// If we got an error that's not a 404, that's unexpected
+		if lastErr != nil && !isNotFoundError(lastErr) {
+			return fmt.Errorf("unexpected error checking custom profile %s: %w", profileID, lastErr)
+		}
+	}
+
+	return nil
 }
 
 func TestAccCustomProfileResource(t *testing.T) {
@@ -52,14 +93,13 @@ func TestAccCustomProfileResource(t *testing.T) {
 					resource.TestCheckResourceAttrSet("simplemdm_customprofile.test", "id"),
 				),
 			},
-			// ImportState testing - temporarily disabled due to timing issues with SimpleMDM API
-			// The profile may not be immediately available for import after creation
-			// {
-			// 	ResourceName:            "simplemdm_customprofile.test",
-			// 	ImportState:             true,
-			// 	ImportStateVerify:       true,
-			// 	ImportStateVerifyIgnore: []string{"mobileconfig"},
-			// },
+			// ImportState testing
+			{
+				ResourceName:            "simplemdm_customprofile.test",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"mobileconfig"},
+			},
 			// Update and Read testing
 			{
 				Config: providerConfig + `
