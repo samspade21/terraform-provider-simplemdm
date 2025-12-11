@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -25,13 +26,31 @@ func testAccCheckAttributeDestroy(s *terraform.State) error {
 		// The attribute ID is the attribute name
 		attributeName := rs.Primary.ID
 
-		_, err := client.AttributeGet(attributeName)
-		if err == nil {
-			return fmt.Errorf("attribute %s still exists after destroy", attributeName)
+		// Try to fetch the resource with retry for eventual consistency
+		// SimpleMDM API may take time to fully delete attributes
+		var lastErr error
+		for attempt := 0; attempt < 3; attempt++ {
+			_, lastErr = client.AttributeGet(attributeName)
+
+			// If we get a 404, the resource is properly deleted
+			if lastErr != nil && isNotFoundError(lastErr) {
+				break
+			}
+
+			// If the resource still exists after 3 attempts, it wasn't deleted
+			if lastErr == nil && attempt == 2 {
+				return fmt.Errorf("attribute %s still exists after destroy", attributeName)
+			}
+
+			// Wait briefly before retrying (only if not last attempt)
+			if attempt < 2 && lastErr == nil {
+				time.Sleep(2 * time.Second)
+			}
 		}
-		// We expect a 404 or similar error indicating the attribute doesn't exist
-		if !isNotFoundError(err) {
-			return fmt.Errorf("unexpected error checking attribute %s: %w", attributeName, err)
+
+		// If we got an error that's not a 404, that's unexpected
+		if lastErr != nil && !isNotFoundError(lastErr) {
+			return fmt.Errorf("unexpected error checking attribute %s: %w", attributeName, lastErr)
 		}
 	}
 
