@@ -43,9 +43,9 @@ resource "simplemdm_device_command" "disable_lost_mode" {
 output "lost_mode_command_ids" {
   description = "IDs of lost mode commands"
   value = {
-    enable  = simplemdm_device_command.enable_lost_mode.id
-    sound   = simplemdm_device_command.lost_mode_sound.id
+    enable   = simplemdm_device_command.enable_lost_mode.id
+    sound    = simplemdm_device_command.lost_mode_sound.id
     location = simplemdm_device_command.lost_mode_location.id
-    disable = simplemdm_device_command.disable_lost_mode.id
+    disable  = simplemdm_device_command.disable_lost_mode.id
   }
 }

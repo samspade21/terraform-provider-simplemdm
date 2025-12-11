@@ -179,21 +179,21 @@ func TestAccAssignmentGroupResource_Import(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: providerConfig + fmt.Sprintf(`
+				Config: providerConfig + `
 					resource "simplemdm_assignmentgroup" "test_import" {
 						name       = "Test Import Group"
 						auto_deploy = true
 						group_type = "standard"
 						priority   = 5
 					}
-				`),
+				`,
 			},
 			{
 				ResourceName:      "simplemdm_assignmentgroup.test_import",
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{
-					"apps_update", "apps_push", "profiles_sync", "devices_remove_others",
+					"apps_update", "apps_push", "profiles_sync", "devices_remove_others", "group_type",
 				},
 			},
 		},

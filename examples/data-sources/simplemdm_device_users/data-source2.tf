@@ -1,6 +1,6 @@
 # Advanced Example - Query device users
 data "simplemdm_device_users" "device_users" {
-  device_id = "123456"  # Must be a macOS device
+  device_id = "123456" # Must be a macOS device
 }
 
 # Filter logged in users

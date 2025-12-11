@@ -193,7 +193,14 @@ func applyAssignmentGroupResponseToResourceModel(model *assignment_groupResource
 
 	model.Name = types.StringValue(response.Data.Attributes.Name)
 	model.AutoDeploy = types.BoolValue(response.Data.Attributes.AutoDeploy)
-	model.GroupType = types.StringValue(response.Data.Attributes.GroupType)
+	
+	// Preserve existing group_type value if present (deprecated field)
+	// The API may return different values (e.g., "static") for accounts using New Groups Experience
+	// but we want to maintain the user's configured value ("standard" or "munki") to avoid drift
+	if model.GroupType.IsNull() || model.GroupType.IsUnknown() {
+		model.GroupType = types.StringValue(response.Data.Attributes.GroupType)
+	}
+	// Otherwise keep the existing model.GroupType value
 
 	// install_type is only returned by API for munki groups
 	// For standard groups, set to null since API doesn't return it

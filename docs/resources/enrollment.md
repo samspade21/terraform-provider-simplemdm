@@ -8,9 +8,7 @@ description: |-
 
 # simplemdm_enrollment (Resource)
 
-Enrollment resource manages SimpleMDM enrollment links. There are two types: One-time enrollments (with a URL) can be used once by a single device and support sending invitations. Account driven enrollments (URL is null) can be used multiple times but do not support invitations.
-
-**Note:** You must specify either `device_group_id` (for legacy device groups) or `assignment_group_id` (for modern assignment groups).
+Enrollment resource manages SimpleMDM enrollment links. There are two types: One-time enrollments (with a URL) can be used once by a single device and support sending invitations. Account driven enrollments (URL is null) can be used multiple times but do not support invitations. Note: You must specify either device_group_id (for legacy device groups) or assignment_group_id (for modern assignment groups).
 
 ## Example Usage
 
@@ -23,9 +21,7 @@ resource "simplemdm_enrollment" "legacy" {
   authentication     = false
   invitation_contact = "user@example.com"
 }
-```
 
-```terraform
 # Using modern assignment groups (recommended)
 resource "simplemdm_enrollment" "modern" {
   assignment_group_id = "5678"
@@ -37,11 +33,11 @@ resource "simplemdm_enrollment" "modern" {
 ```
 
 ```terraform
-# Advanced Example - User enrollment with authentication
+# Advanced Example - User enrollment with authentication using assignment groups
 resource "simplemdm_assignmentgroup" "byod_devices" {
-  name             = "BYOD Devices"
-  auto_deploy      = true
-  device_families  = ["iPhone", "iPad"]
+  name            = "BYOD Devices"
+  auto_deploy     = true
+  device_families = ["iPhone", "iPad"]
 }
 
 resource "simplemdm_enrollment" "user_enrollment" {

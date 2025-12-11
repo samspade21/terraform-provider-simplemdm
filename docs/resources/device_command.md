@@ -10,18 +10,9 @@ description: |-
 
 Executes management commands against a SimpleMDM device. Commands are executed immediately during resource creation and cannot be reversed by removing the resource. This is a fire-and-forget operation - removing the resource from Terraform state does not undo the command.
 
-## Important Notes
-
-- **Fire-and-forget**: Commands execute once during creation and cannot be undone by removing the resource
-- **No updates**: Changing any attribute forces replacement (destroys and recreates the resource, executing the command again)
-- **Status codes**: A 202 (Accepted) status indicates the command was queued, not that it completed on the device
-- **Rate limiting**: The `refresh` command may return HTTP 429 if called too frequently; the provider will retry automatically
-- **Import not supported**: Commands cannot be imported as they represent one-time operations
-
 ## Example Usage
 
 ```terraform
-# Basic command - Lock device
 resource "simplemdm_device_command" "lock_device" {
   device_id = "123456"
   command   = "lock"
@@ -34,15 +25,10 @@ resource "simplemdm_device_command" "lock_device" {
 ```
 
 ```terraform
-# Restart device with parameters
+# Advanced Example - Restart device command
 resource "simplemdm_device_command" "restart_device" {
   device_id = "123456"
   command   = "restart"
-
-  parameters = {
-    rebuild_kernel_cache = "true"
-    notify_user         = "false"
-  }
 }
 
 output "restart_command_id" {
@@ -52,7 +38,7 @@ output "restart_command_id" {
 ```
 
 ```terraform
-# Enable Lost Mode
+# Advanced Example - Enable Lost Mode
 resource "simplemdm_device_command" "enable_lost_mode" {
   device_id = "123456"
   command   = "enable_lost_mode"
@@ -63,24 +49,44 @@ resource "simplemdm_device_command" "enable_lost_mode" {
     footnote     = "Reward if found"
   }
 }
-```
 
-```terraform
-# Clear passcode command
-resource "simplemdm_device_command" "clear_passcode" {
+# Advanced Example - Play sound in lost mode
+resource "simplemdm_device_command" "lost_mode_sound" {
   device_id = "123456"
-  command   = "clear_passcode"
+  command   = "lost_mode_play_sound"
+
+  # This command depends on lost mode being enabled first
+  depends_on = [simplemdm_device_command.enable_lost_mode]
 }
-```
 
-```terraform
-# Set time zone
-resource "simplemdm_device_command" "set_timezone" {
-  device_id = "789012"
-  command   = "set_time_zone"
+# Advanced Example - Update location in lost mode
+resource "simplemdm_device_command" "lost_mode_location" {
+  device_id = "123456"
+  command   = "lost_mode_update_location"
 
-  parameters = {
-    time_zone = "America/Los_Angeles"
+  # This command depends on lost mode being enabled first
+  depends_on = [simplemdm_device_command.enable_lost_mode]
+}
+
+# Advanced Example - Disable Lost Mode
+resource "simplemdm_device_command" "disable_lost_mode" {
+  device_id = "123456"
+  command   = "disable_lost_mode"
+
+  # Only disable after other lost mode operations complete
+  depends_on = [
+    simplemdm_device_command.lost_mode_sound,
+    simplemdm_device_command.lost_mode_location
+  ]
+}
+
+output "lost_mode_command_ids" {
+  description = "IDs of lost mode commands"
+  value = {
+    enable   = simplemdm_device_command.enable_lost_mode.id
+    sound    = simplemdm_device_command.lost_mode_sound.id
+    location = simplemdm_device_command.lost_mode_location.id
+    disable  = simplemdm_device_command.disable_lost_mode.id
   }
 }
 ```
@@ -139,7 +145,3 @@ System Configuration:
 - `id` (String) Internal identifier for the executed command.
 - `response` (String) Raw response payload, if any, returned by the API.
 - `status_code` (Number) HTTP status code returned by the SimpleMDM API. Note: A 202 (Accepted) status indicates the command was queued, not that it completed successfully on the device. A 204 (No Content) indicates successful completion of commands like set_time_zone.
-
-## Import
-
-Device commands cannot be imported as they represent fire-and-forget operations that execute once and cannot be read back from the API. Commands must be defined in Terraform configuration to be executed.

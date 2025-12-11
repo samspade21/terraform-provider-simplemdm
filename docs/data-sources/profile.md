@@ -10,8 +10,6 @@ description: |-
 
 Profile data source can be used to reference existing configuration profiles in SimpleMDM. Profiles represent both built-in and custom configuration profiles.
 
-**Note:** Profiles are read-only in the SimpleMDM API. To create custom configuration profiles, use the `simplemdm_customprofile` resource.
-
 ## Example Usage
 
 ```terraform
@@ -21,7 +19,7 @@ data "simplemdm_profile" "profile" {
 ```
 
 ```terraform
-# Advanced Example - Use existing profile in assignment group
+# Advanced Example - Use predefined profile in assignment group
 data "simplemdm_profile" "company_wifi" {
   id = "123456"
 }

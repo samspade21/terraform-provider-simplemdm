@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/DavidKrau/simplemdm-go-client"
 )

@@ -53,3 +53,4 @@ output "attribute_metadata" {
 ### Read-Only
 
 - `default_value` (String) Default (global) value of the Attribute.
+- `id` (String) The unique identifier for the custom attribute (same as name).

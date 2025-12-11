@@ -45,7 +45,7 @@ func testAccCheckCustomDeclarationDeviceAssignmentDestroy(s *terraform.State) er
 			return fmt.Errorf("failed to parse device response: %w", err)
 		}
 
-		assigned, err := deviceHasCustomDeclarationAssignment(body, customDeclarationID)
+		assigned, err := deviceHasCustomDeclarationAssignment(body, customDeclarationID, deviceID)
 		if err != nil {
 			return fmt.Errorf("error checking assignment: %w", err)
 		}

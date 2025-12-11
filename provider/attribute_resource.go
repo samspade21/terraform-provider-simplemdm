@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"regexp"
-	"strings"
 
 	"github.com/DavidKrau/simplemdm-go-client"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -201,9 +200,4 @@ func (r *attributeResource) Delete(ctx context.Context, req resource.DeleteReque
 		)
 		return
 	}
-}
-
-// isNotFoundError checks if an error is a 404 not found error
-func isNotFoundError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "404")
 }

@@ -2,9 +2,7 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
 
 	"github.com/DavidKrau/simplemdm-go-client"
@@ -127,72 +125,7 @@ func (r *deviceGroupResource) Create(ctx context.Context, req resource.CreateReq
 		"Device Groups are deprecated in SimpleMDM and cannot be created via the API. "+
 			"Legacy device groups are read-only through this resource. "+
 			"Please use simplemdm_assignmentgroup for new group functionality.",
-	)
-	return
-}
-
-// Deprecated: cloneDeviceGroup is no longer functional as device group creation is not supported
-func (r *deviceGroupResource) deprecatedCreate(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	//Retrieve values from plan
-	var plan deviceGroupResourceModel
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	var (
-		deviceGroup *simplemdm.SimplemdmDefaultStruct
-		err         error
-	)
-
-	if !plan.CloneFrom.IsNull() && !plan.CloneFrom.IsUnknown() && plan.CloneFrom.ValueString() != "" {
-		deviceGroup, err = cloneDeviceGroup(ctx, r.client, plan.CloneFrom.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error cloning device group",
-				"Could not clone SimpleMDM device group: "+err.Error(),
-			)
-			return
-		}
-	} else {
-		// This API endpoint does not exist
-		resp.Diagnostics.AddError(
-			"Device Group Creation Not Supported",
-			"Device Groups cannot be created via the API.",
 		)
-		return
-	}
-
-	plan.ID = types.StringValue(strconv.Itoa(deviceGroup.Data.ID))
-
-	if plan.Name.ValueString() != "" && plan.Name.ValueString() != deviceGroup.Data.Attributes.Name {
-		if err := updateDeviceGroupName(ctx, r.client, plan.ID.ValueString(), plan.Name.ValueString()); err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating device group name",
-				"Could not update SimpleMDM device group name: "+err.Error(),
-			)
-			return
-		}
-	}
-
-	r.reconcileAttributes(ctx, plan.ID.ValueString(), types.MapNull(types.StringType), plan.Attributes, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	r.reconcileProfiles(ctx, plan.ID.ValueString(), types.SetNull(types.StringType), plan.Profiles, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	r.reconcileCustomProfiles(ctx, plan.ID.ValueString(), types.SetNull(types.StringType), plan.CustomProfiles, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	diags = resp.State.Set(ctx, plan)
-	resp.Diagnostics.Append(diags...)
 }
 
 func (r *deviceGroupResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -514,65 +447,4 @@ func extractStringSet(set types.Set) []string {
 	}
 
 	return values
-}
-
-func updateDeviceGroupName(ctx context.Context, client *simplemdm.Client, groupID, name string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("https://%s/api/v1/device_groups/%s", client.HostName, groupID), nil)
-	if err != nil {
-		return err
-	}
-
-	query := req.URL.Query()
-	query.Add("name", name)
-	req.URL.RawQuery = query.Encode()
-
-	_, err = client.RequestResponse200(req)
-	return err
-}
-
-// cloneDeviceGroupResponse represents the actual API response structure for clone operations
-type cloneDeviceGroupResponse struct {
-	Data struct {
-		Type       string `json:"type"`
-		ID         int    `json:"id"`
-		Attributes struct {
-			Name string `json:"name"`
-		} `json:"attributes"`
-		Relationships struct {
-			Devices struct {
-				Data []interface{} `json:"data"`
-			} `json:"devices"`
-		} `json:"relationships"`
-	} `json:"data"`
-}
-
-func cloneDeviceGroup(ctx context.Context, client *simplemdm.Client, sourceID string) (*simplemdm.SimplemdmDefaultStruct, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("https://%s/api/v1/device_groups/%s/clone", client.HostName, sourceID), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := client.RequestResponse200(req)
-	if err != nil {
-		return nil, err
-	}
-
-	// Use the correct response structure that matches the API specification
-	var cloneResp cloneDeviceGroupResponse
-	if err := json.Unmarshal(body, &cloneResp); err != nil {
-		return nil, err
-	}
-
-	// Convert to the expected structure
-	result := &simplemdm.SimplemdmDefaultStruct{
-		Data: simplemdm.SimplemdmDefault{
-			ID:   cloneResp.Data.ID,
-			Type: cloneResp.Data.Type,
-			Attributes: simplemdm.SimplemdmDefaultAttributes{
-				Name: cloneResp.Data.Attributes.Name,
-			},
-		},
-	}
-
-	return result, nil
 }

@@ -3,7 +3,7 @@
 # Use simplemdm_assignmentgroup for modern groups
 
 data "simplemdm_devicegroup" "legacy_group" {
-  id = "123456"  # Must be a legacy device group ID
+  id = "123456" # Must be a legacy device group ID
 }
 
 output "device_group_info" {

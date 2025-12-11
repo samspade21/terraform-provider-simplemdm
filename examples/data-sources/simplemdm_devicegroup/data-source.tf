@@ -4,7 +4,7 @@
 # This example is maintained for backward compatibility only
 
 data "simplemdm_devicegroup" "legacy_devicegroup" {
-  id = "123456"  # Must be a legacy device group ID from a migrated group
+  id = "123456" # Must be a legacy device group ID from a migrated group
 }
 
 # Recommended: Use Assignment Groups instead
