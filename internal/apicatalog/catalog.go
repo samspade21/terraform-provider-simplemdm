@@ -84,7 +84,6 @@ var Catalog = []EndpointCoverage{
 	{
 		Name:           "Profiles",
 		Endpoint:       "/api/v1/profiles",
-		ResourceType:   "simplemdm_profile",
 		DataSourceType: "simplemdm_profile",
 		DocsURL:        "https://api.simplemdm.com/v1/#tag/Profiles",
 	},
