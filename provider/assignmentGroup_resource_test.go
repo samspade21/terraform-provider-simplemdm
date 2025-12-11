@@ -91,7 +91,7 @@ func TestAccAssignmentGroupResource(t *testing.T) {
 					resource "simplemdm_assignmentgroup" "testgroup2" {
 						name                  = "Test Assignment Group Resource"
 						auto_deploy           = false
-						group_type            = "static"
+						group_type            = "standard"
 						priority              = 3
 						app_track_location    = false
 						apps                  = [data.simplemdm_app.fixture_app.id]
@@ -105,7 +105,7 @@ func TestAccAssignmentGroupResource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify attributes
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "name", "Test Assignment Group Resource"),
-					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "group_type", "static"),
+					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "group_type", "standard"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "priority", "3"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "app_track_location", "false"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "devices_remove_others", "true"),
@@ -183,7 +183,7 @@ func TestAccAssignmentGroupResource_Import(t *testing.T) {
 					resource "simplemdm_assignmentgroup" "test_import" {
 						name       = "Test Import Group"
 						auto_deploy = true
-						group_type = "static"
+						group_type = "standard"
 						priority   = 5
 					}
 				`,
@@ -217,7 +217,7 @@ func TestAccAssignmentGroupResource_RelationshipUpdates(t *testing.T) {
 					resource "simplemdm_assignmentgroup" "test_relationships" {
 						name       = "Test Relationships Group"
 						auto_deploy = false
-						group_type = "static"
+						group_type = "standard"
 					}
 				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -235,7 +235,7 @@ func TestAccAssignmentGroupResource_RelationshipUpdates(t *testing.T) {
 					resource "simplemdm_assignmentgroup" "test_relationships" {
 						name       = "Test Relationships Group"
 						auto_deploy = false
-						group_type = "static"
+						group_type = "standard"
 						apps       = [data.simplemdm_app.test_app.id]
 					}
 				`, appID),
@@ -257,7 +257,7 @@ func TestAccAssignmentGroupResource_RelationshipUpdates(t *testing.T) {
 					resource "simplemdm_assignmentgroup" "test_relationships" {
 						name       = "Test Relationships Group"
 						auto_deploy = false
-						group_type = "static"
+						group_type = "standard"
 						apps       = [data.simplemdm_app.test_app.id]
 						profiles   = [data.simplemdm_profile.test_profile.id]
 					}
@@ -277,7 +277,7 @@ func TestAccAssignmentGroupResource_RelationshipUpdates(t *testing.T) {
 					resource "simplemdm_assignmentgroup" "test_relationships" {
 						name       = "Test Relationships Group"
 						auto_deploy = false
-						group_type = "static"
+						group_type = "standard"
 						profiles   = [data.simplemdm_profile.test_profile.id]
 					}
 				`, profileID),
@@ -302,7 +302,7 @@ func TestAccAssignmentGroupResource_RateLimitHandling(t *testing.T) {
 					resource "simplemdm_assignmentgroup" "test_ratelimit" {
 						name          = "Test Rate Limit Group"
 						auto_deploy   = false
-						group_type    = "static"
+						group_type    = "standard"
 						profiles_sync = true
 					}
 				`,
