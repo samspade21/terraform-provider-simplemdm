@@ -42,13 +42,11 @@ type assignment_groupResourceModel struct {
 	AppsPush            types.Bool   `tfsdk:"apps_push"`
 	Profiles            types.Set    `tfsdk:"profiles"`
 	ProfilesSync        types.Bool   `tfsdk:"profiles_sync"`
-	Groups              types.Set    `tfsdk:"groups"`
 	Devices             types.Set    `tfsdk:"devices"`
 	DevicesRemoveOthers types.Bool   `tfsdk:"devices_remove_others"`
 	CreatedAt           types.String `tfsdk:"created_at"`
 	UpdatedAt           types.String `tfsdk:"updated_at"`
 	DeviceCount         types.Int64  `tfsdk:"device_count"`
-	GroupCount          types.Int64  `tfsdk:"group_count"`
 }
 
 // AssignmentGroupResource is a helper function to simplify the provider implementation.
@@ -172,13 +170,6 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 				Default:     booldefault.StaticBool(false),
 				Description: "Optional. Triggers 'Sync Profiles' command during apply. This pushes all assigned profiles to devices in the assignment group. Set to true after profile changes to sync. ⚠️ Rate limited to 1 request per 30 seconds - wait between applies if true. This is a one-time action on each apply where it's true.",
 			},
-			"groups": schema.SetAttribute{
-				ElementType:        types.StringType,
-				Optional:           true,
-				Computed:           true,
-				DeprecationMessage: "The device_groups assignment API is deprecated by SimpleMDM. This only works with legacy_device_group_id from migrated groups. For accounts using the New Groups Experience, use device assignments instead.",
-				Description:        "Optional. List of Device Groups assigned to this Assignment Group. ⚠️ DEPRECATED: This uses a deprecated API that only works with legacy_device_group_id from previously migrated groups.",
-			},
 			"devices": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
@@ -202,10 +193,6 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 			"device_count": schema.Int64Attribute{
 				Computed:    true,
 				Description: "Number of devices currently assigned to the assignment group.",
-			},
-			"group_count": schema.Int64Attribute{
-				Computed:    true,
-				Description: "Number of device groups currently assigned to the assignment group.",
 			},
 		},
 	}
@@ -329,14 +316,6 @@ func (r *assignment_groupResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	// Assign all groups in plan
-	if err := assignObjectsToGroup(ctx, r.client, plan.ID.ValueString(), plan.Groups, "device_groups", false); err != nil {
-		resp.Diagnostics.AddError(
-			"Error assigning device groups to assignment group",
-			"Could not assign device groups to assignment group, unexpected error: "+err.Error(),
-		)
-		return
-	}
 
 	// Assign all devices in plan
 	if err := assignObjectsToGroup(ctx, r.client, plan.ID.ValueString(), plan.Devices, "devices", boolValueOrDefault(plan.DevicesRemoveOthers, false)); err != nil {
@@ -390,20 +369,18 @@ func (r *assignment_groupResource) Create(ctx context.Context, req resource.Crea
 	// This handles eventual consistency where API may not immediately return assigned items
 	plannedApps := plan.Apps
 	plannedProfiles := plan.Profiles
-	plannedGroups := plan.Groups
 	plannedDevices := plan.Devices
 
 	// Check what the API actually returned before applying to model
 	apiReturnedApps := len(fetched.Data.Relationships.Apps.Data) > 0
 	apiReturnedProfiles := len(fetched.Data.Relationships.Profiles.Data) > 0
-	apiReturnedGroups := len(fetched.Data.Relationships.DeviceGroups.Data) > 0
 	apiReturnedDevices := len(fetched.Data.Relationships.Devices.Data) > 0
 
 	applyAssignmentGroupResponseToResourceModel(&plan, fetched)
 
 	// Preserve planned relationships if API hasn't returned them yet (eventual consistency)
-	preservePlannedRelationships(&plan, plannedApps, plannedProfiles, plannedGroups, plannedDevices,
-		apiReturnedApps, apiReturnedProfiles, apiReturnedGroups, apiReturnedDevices)
+	preservePlannedRelationships(&plan, plannedApps, plannedProfiles, plannedDevices,
+		apiReturnedApps, apiReturnedProfiles, apiReturnedDevices)
 
 	// Set state to fully populated data
 	diags = resp.State.Set(ctx, plan)
@@ -492,14 +469,6 @@ func (r *assignment_groupResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	// Update all assigned groups
-	if err := updateAssignmentGroupObjects(ctx, r.client, plan.ID.ValueString(), state.Groups, plan.Groups, "device_groups", false); err != nil {
-		resp.Diagnostics.AddError(
-			"Error updating assignment group device group assignments",
-			"Could not update assignment group device group assignments, unexpected error: "+err.Error(),
-		)
-		return
-	}
 
 	// Update all assigned devices
 	if err := updateAssignmentGroupObjects(ctx, r.client, plan.ID.ValueString(), state.Devices, plan.Devices, "devices", boolValueOrDefault(plan.DevicesRemoveOthers, false)); err != nil {
@@ -553,20 +522,18 @@ func (r *assignment_groupResource) Update(ctx context.Context, req resource.Upda
 	// This handles eventual consistency where API may not immediately return assigned items
 	plannedApps := plan.Apps
 	plannedProfiles := plan.Profiles
-	plannedGroups := plan.Groups
 	plannedDevices := plan.Devices
 
 	// Check what the API actually returned before applying to model
 	apiReturnedApps := len(fetched.Data.Relationships.Apps.Data) > 0
 	apiReturnedProfiles := len(fetched.Data.Relationships.Profiles.Data) > 0
-	apiReturnedGroups := len(fetched.Data.Relationships.DeviceGroups.Data) > 0
 	apiReturnedDevices := len(fetched.Data.Relationships.Devices.Data) > 0
 
 	applyAssignmentGroupResponseToResourceModel(&plan, fetched)
 
 	// Preserve planned relationships if API hasn't returned them yet (eventual consistency)
-	preservePlannedRelationships(&plan, plannedApps, plannedProfiles, plannedGroups, plannedDevices,
-		apiReturnedApps, apiReturnedProfiles, apiReturnedGroups, apiReturnedDevices)
+	preservePlannedRelationships(&plan, plannedApps, plannedProfiles, plannedDevices,
+		apiReturnedApps, apiReturnedProfiles, apiReturnedDevices)
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)

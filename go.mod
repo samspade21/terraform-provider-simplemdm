@@ -3,7 +3,7 @@ module github.com/DavidKrau/terraform-provider-simplemdm
 go 1.24.0
 
 require (
-	github.com/DavidKrau/simplemdm-go-client v0.1.10
+	github.com/DavidKrau/simplemdm-go-client v0.2.3
 	github.com/hashicorp/terraform-plugin-docs v0.24.0
 	github.com/hashicorp/terraform-plugin-framework v1.12.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.13.0

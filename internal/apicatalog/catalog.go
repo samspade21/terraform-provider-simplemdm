@@ -68,13 +68,6 @@ var Catalog = []EndpointCoverage{
 		DocsURL:        "https://api.simplemdm.com/v1/#tag/Devices",
 	},
 	{
-		Name:           "Device Groups",
-		Endpoint:       "/api/v1/device_groups",
-		ResourceType:   "simplemdm_devicegroup",
-		DataSourceType: "simplemdm_devicegroup",
-		DocsURL:        "https://api.simplemdm.com/v1/#tag/Device-Groups",
-	},
-	{
 		Name:           "Enrollments",
 		Endpoint:       "/api/v1/enrollments",
 		ResourceType:   "simplemdm_enrollment",

@@ -36,10 +36,9 @@ type assignmentGroupAttributes struct {
 }
 
 type assignmentGroupRelationships struct {
-	Apps         assignmentGroupRelationshipItems `json:"apps"`
-	Profiles     assignmentGroupRelationshipItems `json:"profiles"`
-	Devices      assignmentGroupRelationshipItems `json:"devices"`
-	DeviceGroups assignmentGroupRelationshipItems `json:"device_groups"`
+	Apps     assignmentGroupRelationshipItems `json:"apps"`
+	Profiles assignmentGroupRelationshipItems `json:"profiles"`
+	Devices  assignmentGroupRelationshipItems `json:"devices"`
 }
 
 type assignmentGroupRelationshipItems struct {
@@ -187,7 +186,6 @@ func assignmentGroupAssignDevice(ctx context.Context, client *simplemdm.Client, 
 func applyAssignmentGroupResponseToResourceModel(model *assignment_groupResourceModel, response *assignmentGroupResponse) {
 	model.ID = types.StringValue(strconv.Itoa(response.Data.ID))
 	model.Apps = buildStringSetFromRelationshipItems(response.Data.Relationships.Apps.Data)
-	model.Groups = buildStringSetFromRelationshipItems(response.Data.Relationships.DeviceGroups.Data)
 	model.Devices = buildStringSetFromRelationshipItems(response.Data.Relationships.Devices.Data)
 	model.Profiles = buildStringSetFromRelationshipItems(response.Data.Relationships.Profiles.Data)
 
@@ -232,7 +230,6 @@ func applyAssignmentGroupResponseToResourceModel(model *assignment_groupResource
 	model.UpdatedAt = types.StringValue(response.Data.Attributes.UpdatedAt)
 
 	model.DeviceCount = types.Int64Value(int64(response.Data.Attributes.DeviceCount))
-	model.GroupCount = types.Int64Value(int64(response.Data.Attributes.GroupCount))
 }
 
 func applyAssignmentGroupResponseToDataSourceModel(model *assignmentGroupDataSourceModel, response *assignmentGroupResponse) {
@@ -265,12 +262,10 @@ func applyAssignmentGroupResponseToDataSourceModel(model *assignmentGroupDataSou
 	model.UpdatedAt = types.StringValue(response.Data.Attributes.UpdatedAt)
 
 	model.Apps = buildStringSetFromRelationshipItems(response.Data.Relationships.Apps.Data)
-	model.Groups = buildStringSetFromRelationshipItems(response.Data.Relationships.DeviceGroups.Data)
 	model.Devices = buildStringSetFromRelationshipItems(response.Data.Relationships.Devices.Data)
 	model.Profiles = buildStringSetFromRelationshipItems(response.Data.Relationships.Profiles.Data)
 
 	model.DeviceCount = types.Int64Value(int64(response.Data.Attributes.DeviceCount))
-	model.GroupCount = types.Int64Value(int64(response.Data.Attributes.GroupCount))
 }
 
 // setElementsToStringSlice converts a types.Set to a []string slice
@@ -427,8 +422,8 @@ func diffFunction(state []string, plan []string) (add []string, remove []string)
 // when the API doesn't immediately return assigned relationships
 func preservePlannedRelationships(
 	model *assignment_groupResourceModel,
-	plannedApps, plannedProfiles, plannedGroups, plannedDevices types.Set,
-	apiReturnedApps, apiReturnedProfiles, apiReturnedGroups, apiReturnedDevices bool,
+	plannedApps, plannedProfiles, plannedDevices types.Set,
+	apiReturnedApps, apiReturnedProfiles, apiReturnedDevices bool,
 ) {
 	// Restore planned relationship values if they were set but API returned empty
 	// This prevents "planned X but got Y" errors due to API eventual consistency
@@ -437,9 +432,6 @@ func preservePlannedRelationships(
 	}
 	if !plannedProfiles.IsNull() && !plannedProfiles.IsUnknown() && !apiReturnedProfiles {
 		model.Profiles = plannedProfiles
-	}
-	if !plannedGroups.IsNull() && !plannedGroups.IsUnknown() && !apiReturnedGroups {
-		model.Groups = plannedGroups
 	}
 	if !plannedDevices.IsNull() && !plannedDevices.IsUnknown() && !apiReturnedDevices {
 		model.Devices = plannedDevices

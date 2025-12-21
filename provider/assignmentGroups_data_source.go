@@ -37,11 +37,9 @@ type assignmentGroupsDataSourceGroupModel struct {
 	CreatedAt        types.String `tfsdk:"created_at"`
 	UpdatedAt        types.String `tfsdk:"updated_at"`
 	DeviceCount      types.Int64  `tfsdk:"device_count"`
-	GroupCount       types.Int64  `tfsdk:"group_count"`
 	Apps             types.Set    `tfsdk:"apps"`
 	Profiles         types.Set    `tfsdk:"profiles"`
 	Devices          types.Set    `tfsdk:"devices"`
-	Groups           types.Set    `tfsdk:"groups"`
 }
 
 func AssignmentGroupsDataSource() datasource.DataSource {
@@ -100,10 +98,6 @@ func (d *assignmentGroupsDataSource) Schema(_ context.Context, _ datasource.Sche
 							Computed:    true,
 							Description: "Number of devices currently assigned to the assignment group.",
 						},
-						"group_count": schema.Int64Attribute{
-							Computed:    true,
-							Description: "Number of device groups currently assigned to the assignment group.",
-						},
 						"apps": schema.SetAttribute{
 							Computed:    true,
 							ElementType: types.StringType,
@@ -118,11 +112,6 @@ func (d *assignmentGroupsDataSource) Schema(_ context.Context, _ datasource.Sche
 							Computed:    true,
 							ElementType: types.StringType,
 							Description: "IDs of devices assigned directly to the assignment group.",
-						},
-						"groups": schema.SetAttribute{
-							Computed:    true,
-							ElementType: types.StringType,
-							Description: "IDs of device groups assigned to the assignment group.",
 						},
 					},
 				},
@@ -158,7 +147,6 @@ func (d *assignmentGroupsDataSource) Read(ctx context.Context, req datasource.Re
 			Priority:         types.Int64Value(int64(group.Attributes.Priority)),
 			AppTrackLocation: types.BoolValue(group.Attributes.AppTrackLocation),
 			DeviceCount:      types.Int64Value(int64(group.Attributes.DeviceCount)),
-			GroupCount:       types.Int64Value(int64(group.Attributes.GroupCount)),
 		}
 
 		// Set install_type if available
@@ -184,7 +172,6 @@ func (d *assignmentGroupsDataSource) Read(ctx context.Context, req datasource.Re
 		entry.Apps = buildStringSetFromRelationshipItems(group.Relationships.Apps.Data)
 		entry.Profiles = buildStringSetFromRelationshipItems(group.Relationships.Profiles.Data)
 		entry.Devices = buildStringSetFromRelationshipItems(group.Relationships.Devices.Data)
-		entry.Groups = buildStringSetFromRelationshipItems(group.Relationships.DeviceGroups.Data)
 
 		entries = append(entries, entry)
 	}
@@ -293,5 +280,4 @@ type assignmentGroupDataAttributes struct {
 	CreatedAt        string `json:"created_at"`
 	UpdatedAt        string `json:"updated_at"`
 	DeviceCount      int    `json:"device_count"`
-	GroupCount       int    `json:"group_count"`
 }
