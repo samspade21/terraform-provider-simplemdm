@@ -265,11 +265,14 @@ func (r *scriptJobResource) Create(ctx context.Context, req resource.CreateReque
 	// Note: Validation for at least one target being provided is already handled by schema validators
 	// at lines 101-106, 115-121, and 130-136, so no additional validation is needed here.
 
+	// Combine legacy group_ids with assignment_group_ids for the API call
+	// The v0.2+ client only has a single assignmentGroupIds parameter
+	allGroupIDs := append(groupIDs, assignmentGroupIDs...)
+
 	scriptJob, err := r.client.ScriptJobCreate(
 		plan.ScriptId.ValueString(),
 		deviceIDs,
-		groupIDs,
-		assignmentGroupIDs,
+		allGroupIDs,
 		customAttribute,
 		customAttributeRegex,
 	)

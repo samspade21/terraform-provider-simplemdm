@@ -162,6 +162,46 @@ var resourceDefinitions = []ResourceDefinition{
 
 var dataSourceDefinitions = []DataSourceDefinition{
 	{
+		TypeName:     "simplemdm_account",
+		Factory:      AccountDataSource,
+		DocsPath:     "docs/data-sources/account.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_account"},
+		TestFiles:    []string{"provider/account_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/account"},
+	},
+	{
+		TypeName:     "simplemdm_dep_server",
+		Factory:      DepServerDataSource,
+		DocsPath:     "docs/data-sources/dep_server.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_dep_server"},
+		TestFiles:    []string{"provider/dep_server_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/dep_servers/{DEP_SERVER_ID}"},
+	},
+	{
+		TypeName:     "simplemdm_dep_servers",
+		Factory:      DepServersDataSource,
+		DocsPath:     "docs/data-sources/dep_servers.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_dep_servers"},
+		TestFiles:    []string{"provider/dep_servers_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/dep_servers"},
+	},
+	{
+		TypeName:     "simplemdm_logs",
+		Factory:      LogsDataSource,
+		DocsPath:     "docs/data-sources/logs.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_logs"},
+		TestFiles:    []string{"provider/logs_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/logs"},
+	},
+	{
+		TypeName:     "simplemdm_push_certificate",
+		Factory:      PushCertificateDataSource,
+		DocsPath:     "docs/data-sources/push_certificate.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_push_certificate"},
+		TestFiles:    []string{"provider/push_certificate_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/push_certificate"},
+	},
+	{
 		TypeName:     "simplemdm_app",
 		Factory:      AppDataSource,
 		DocsPath:     "docs/data-sources/app.md",
