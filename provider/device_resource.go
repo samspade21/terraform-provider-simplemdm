@@ -138,22 +138,18 @@ func (r *deviceResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	// Generate API request body from plan
-	// Note: The current simplemdm-go-client library still uses the deprecated group_id parameter.
-	// TODO: Update to use static_group_ids array when library is updated
-	var groupID string
-	if !plan.DeviceGroup.IsNull() {
-		groupID = plan.DeviceGroup.ValueString()
-	} else if !plan.StaticGroupIDs.IsNull() && len(plan.StaticGroupIDs.Elements()) > 0 {
-		// For now, use the first static group ID with the legacy API
-		// This is a workaround until the library supports static_group_ids array
+	// Generate API request body from plan - collect all group IDs as a slice
+	var groupIDs []string
+	if !plan.DeviceGroup.IsNull() && plan.DeviceGroup.ValueString() != "" {
+		groupIDs = append(groupIDs, plan.DeviceGroup.ValueString())
+	}
+	if !plan.StaticGroupIDs.IsNull() {
 		for _, id := range plan.StaticGroupIDs.Elements() {
-			groupID = id.(types.String).ValueString()
-			break
+			groupIDs = append(groupIDs, id.(types.String).ValueString())
 		}
 	}
-	
-	device, err := r.client.DeviceCreate(plan.Name.ValueString(), groupID)
+
+	device, err := r.client.DeviceCreate(plan.Name.ValueString(), groupIDs)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating device",

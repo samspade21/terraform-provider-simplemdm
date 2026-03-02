@@ -1,8 +1,7 @@
 # Terraform Provider testing workflow.
 name: Tests
 
-# This GitHub action runs your tests for each pull request and push.
-# Optionally, you can turn it on using a schedule for regular testing.
+# This GitHub action runs tests for each pull request and push.
 on:
   pull_request:
     paths-ignore:
@@ -11,7 +10,6 @@ on:
     paths-ignore:
       - 'README.md'
 
-# Testing only needs permissions to read the repository contents.
 permissions:
   contents: read
 
@@ -22,31 +20,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
           cache: true
       - run: go mod download
-      - run: go build -v .
+      - run: go build -v ./...
       - name: Run linters
-        uses: golangci/golangci-lint-action@25e2cdc5eb1d7a04fdc45ff538f1a00e960ae128 # v8.0.0
+        uses: golangci/golangci-lint-action@v6
         with:
           version: latest
 
   generate:
+    name: Generate Docs
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+      - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
       - run: go generate ./...
@@ -54,7 +53,7 @@ jobs:
         id: git-check
         run: |
           git diff --compact-summary --exit-code || echo "has_changes=true" >> $GITHUB_OUTPUT
-      - name: Commit and push changes (all push events)
+      - name: Commit and push changes (push events)
         if: steps.git-check.outputs.has_changes == 'true' && github.event_name == 'push'
         run: |
           git config --global user.name 'github-actions[bot]'
@@ -62,7 +61,7 @@ jobs:
           git add -A
           git commit -m "docs: Auto-generate documentation from schema changes"
           git push
-      - name: Fail on uncommitted changes (pull requests only)
+      - name: Fail on uncommitted changes (pull requests)
         if: steps.git-check.outputs.has_changes == 'true' && github.event_name == 'pull_request'
         run: |
           echo "Unexpected difference in directories after code generation."
@@ -70,33 +69,34 @@ jobs:
           git diff --compact-summary
           exit 1
 
-  # Run acceptance tests in a matrix with Terraform CLI versions
+  # Run acceptance tests in a matrix with Terraform CLI versions.
+  # Tests require TF_ACC=1 and SIMPLEMDM_APIKEY to run; without them,
+  # acceptance tests are automatically skipped while unit/coverage tests run.
   test:
-    name: Terraform Provider Acceptance Tests
+    name: Terraform Provider Tests (${{ matrix.terraform }})
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Fork check removed to enable acceptance tests on all branches.
-    # Tests will run when secrets are configured in the repository settings.
-    # If secrets are not available, the test steps will gracefully skip or fail.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        # list whatever Terraform versions here you would like to support
         terraform:
           - '1.8.*'
+          - '1.9.*'
+          - '1.10.*'
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
-      - env:
+      - name: Run tests
+        env:
           TF_ACC: "1"
           SIMPLEMDM_APIKEY: ${{ secrets.SIMPLEMDM_APIKEY }}
           # Fixture IDs for data source tests
@@ -104,15 +104,18 @@ jobs:
           SIMPLEMDM_ASSIGNMENT_GROUP_ID: ${{ secrets.SIMPLEMDM_ASSIGNMENT_GROUP_ID }}
           SIMPLEMDM_ATTRIBUTE_NAME: ${{ secrets.SIMPLEMDM_ATTRIBUTE_NAME }}
           SIMPLEMDM_CUSTOM_PROFILE_ID: ${{ secrets.SIMPLEMDM_CUSTOM_PROFILE_ID }}
+          SIMPLEMDM_CUSTOM_DECLARATION_ID: ${{ secrets.SIMPLEMDM_CUSTOM_DECLARATION_ID }}
           SIMPLEMDM_DEVICE_GROUP_ID: ${{ secrets.SIMPLEMDM_DEVICE_GROUP_ID }}
           SIMPLEMDM_DEVICE_ID: ${{ secrets.SIMPLEMDM_DEVICE_ID }}
           SIMPLEMDM_ENROLLMENT_ID: ${{ secrets.SIMPLEMDM_ENROLLMENT_ID }}
           SIMPLEMDM_PROFILE_ID: ${{ secrets.SIMPLEMDM_PROFILE_ID }}
           SIMPLEMDM_SCRIPT_ID: ${{ secrets.SIMPLEMDM_SCRIPT_ID }}
           SIMPLEMDM_SCRIPT_JOB_ID: ${{ secrets.SIMPLEMDM_SCRIPT_JOB_ID }}
+          SIMPLEMDM_MANAGED_APP_ID: ${{ secrets.SIMPLEMDM_MANAGED_APP_ID }}
           # Fixture IDs for resource tests
           SIMPLEMDM_DEVICE_GROUP_CLONE_SOURCE_ID: ${{ secrets.SIMPLEMDM_DEVICE_GROUP_CLONE_SOURCE_ID }}
           SIMPLEMDM_ENROLLMENT_CONTACT: ${{ secrets.SIMPLEMDM_ENROLLMENT_CONTACT }}
           SIMPLEMDM_CUSTOM_DECLARATION_DEVICE_ID: ${{ secrets.SIMPLEMDM_CUSTOM_DECLARATION_DEVICE_ID }}
-        run: go test -v -cover ./provider/
-        timeout-minutes: 10
+          SIMPLEMDM_DEP_SERVER_ID: ${{ secrets.SIMPLEMDM_DEP_SERVER_ID }}
+        run: go test -v -cover ./provider/... ./internal/...
+        timeout-minutes: 20

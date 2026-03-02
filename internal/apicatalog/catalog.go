@@ -257,4 +257,59 @@ var Catalog = []EndpointCoverage{
 		ResourceType: "simplemdm_device_command",
 		DocsURL:      "https://api.simplemdm.com/v1/#tag/Devices",
 	},
+
+	{
+		Name:           "Account",
+		Endpoint:       "/api/v1/account",
+		DataSourceType: "simplemdm_account",
+		DocsURL:        "https://api.simplemdm.com/v1/#tag/Account",
+	},
+	{
+		Name:           "DEP Servers",
+		Endpoint:       "/api/v1/dep_servers",
+		DataSourceType: "simplemdm_dep_servers",
+		DocsURL:        "https://api.simplemdm.com/v1/#tag/DEP-Servers",
+	},
+	{
+		Name:           "DEP Server",
+		Endpoint:       "/api/v1/dep_servers/{DEP_SERVER_ID}",
+		DataSourceType: "simplemdm_dep_server",
+		DocsURL:        "https://api.simplemdm.com/v1/#tag/DEP-Servers",
+	},
+	{
+		Name:           "Logs",
+		Endpoint:       "/api/v1/logs",
+		DataSourceType: "simplemdm_logs",
+		DocsURL:        "https://api.simplemdm.com/v1/#tag/Logs",
+	},
+	{
+		Name:           "Push Certificate",
+		Endpoint:       "/api/v1/push_certificate",
+		DataSourceType: "simplemdm_push_certificate",
+		DocsURL:        "https://api.simplemdm.com/v1/#tag/Push-Certificate",
+	},
+	{
+		Name:         "Device Command - Enable Lost Mode",
+		Endpoint:     "/api/v1/devices/{DEVICE_ID}/lost_mode (POST)",
+		ResourceType: "simplemdm_device_command",
+		DocsURL:      "https://api.simplemdm.com/v1/#tag/Devices",
+	},
+	{
+		Name:         "Device Command - Disable Lost Mode",
+		Endpoint:     "/api/v1/devices/{DEVICE_ID}/lost_mode (DELETE)",
+		ResourceType: "simplemdm_device_command",
+		DocsURL:      "https://api.simplemdm.com/v1/#tag/Devices",
+	},
+	{
+		Name:         "Device Command - Lost Mode Play Sound",
+		Endpoint:     "/api/v1/devices/{DEVICE_ID}/lost_mode/play_sound",
+		ResourceType: "simplemdm_device_command",
+		DocsURL:      "https://api.simplemdm.com/v1/#tag/Devices",
+	},
+	{
+		Name:         "Device Command - Lost Mode Update Location",
+		Endpoint:     "/api/v1/devices/{DEVICE_ID}/lost_mode/update_location",
+		ResourceType: "simplemdm_device_command",
+		DocsURL:      "https://api.simplemdm.com/v1/#tag/Devices",
+	},
 }
