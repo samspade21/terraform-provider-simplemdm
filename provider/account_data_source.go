@@ -17,12 +17,13 @@ var (
 )
 
 type accountDataSourceModel struct {
-	ID                   types.String `tfsdk:"id"`
-	Name                 types.String `tfsdk:"name"`
-	DefaultDeviceGroupID types.String `tfsdk:"default_device_group_id"`
-	CarrierActivation    types.Bool   `tfsdk:"carrier_activation"`
-	DepEnabled           types.Bool   `tfsdk:"dep_enabled"`
-	AppUpdatesEnabled    types.Bool   `tfsdk:"app_updates_enabled"`
+	ID                    types.String `tfsdk:"id"`
+	Name                  types.String `tfsdk:"name"`
+	AppleStoreCountryCode types.String `tfsdk:"apple_store_country_code"`
+	DefaultDeviceGroupID  types.String `tfsdk:"default_device_group_id"`
+	CarrierActivation     types.Bool   `tfsdk:"carrier_activation"`
+	DepEnabled            types.Bool   `tfsdk:"dep_enabled"`
+	AppUpdatesEnabled     types.Bool   `tfsdk:"app_updates_enabled"`
 }
 
 func AccountDataSource() datasource.DataSource {
@@ -48,6 +49,10 @@ func (d *accountDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 			"name": schema.StringAttribute{
 				Computed:    true,
 				Description: "The company name associated with the account.",
+			},
+			"apple_store_country_code": schema.StringAttribute{
+				Computed:    true,
+				Description: "The Apple App Store country code (e.g., US, AU) used for app catalog operations.",
 			},
 			"default_device_group_id": schema.StringAttribute{
 				Computed:    true,
@@ -88,6 +93,7 @@ func (d *accountDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	state.ID = types.StringValue(fmt.Sprintf("%d", account.Data.ID))
 	state.Name = types.StringValue(account.Data.Attributes.Name)
+	state.AppleStoreCountryCode = types.StringValue(account.Data.Attributes.AppleStoreCountryCode)
 	state.CarrierActivation = types.BoolValue(account.Data.Attributes.CarrierActivation)
 	state.DepEnabled = types.BoolValue(account.Data.Attributes.DepEnabled)
 	state.AppUpdatesEnabled = types.BoolValue(account.Data.Attributes.AppUpdatesEnabled)

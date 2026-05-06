@@ -28,7 +28,7 @@ type logModel struct {
 	ID        types.String `tfsdk:"id"`
 	Namespace types.String `tfsdk:"namespace"`
 	Source    types.String `tfsdk:"source"`
-	Type      types.String `tfsdk:"type"`
+	EventType types.String `tfsdk:"event_type"`
 	Level     types.String `tfsdk:"level"`
 	Message   types.String `tfsdk:"message"`
 	At        types.String `tfsdk:"at"`
@@ -62,9 +62,9 @@ func (d *logsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, r
 							Computed:    true,
 							Description: "The source of the log entry.",
 						},
-						"type": schema.StringAttribute{
+						"event_type": schema.StringAttribute{
 							Computed:    true,
-							Description: "The type of the log entry.",
+							Description: "The event type of the log entry (e.g. 'user.signed_in', 'script.ran').",
 						},
 						"level": schema.StringAttribute{
 							Computed:    true,
@@ -105,10 +105,10 @@ func (d *logsDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	state.Logs = make([]logModel, 0, len(logs))
 	for _, l := range logs {
 		state.Logs = append(state.Logs, logModel{
-			ID:        types.StringValue(fmt.Sprintf("%d", l.ID)),
+			ID:        types.StringValue(l.ID),
 			Namespace: types.StringValue(l.Attributes.Namespace),
 			Source:    types.StringValue(l.Attributes.Source),
-			Type:      types.StringValue(l.Attributes.Type),
+			EventType: types.StringValue(l.Attributes.EventType),
 			Level:     types.StringValue(l.Attributes.Level),
 			Message:   types.StringValue(l.Attributes.Message),
 			At:        types.StringValue(l.Attributes.At),

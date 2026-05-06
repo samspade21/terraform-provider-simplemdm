@@ -1,3 +1,7 @@
 .DS_Store
 mytest/
 terraform-provider-simplemdm
+.env
+.env.local
+*.env
+.envrc

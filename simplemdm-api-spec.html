@@ -6,26 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <title>SimpleMDM API Reference</title>
 
-  <link rel="stylesheet" href="/packs/css/default~api_docs-dc19f71d.chunk.css" media="all" />
-    <script src="/packs/js/runtime~api_docs-a0a56504c0312f512719.js"></script>
-<script src="/packs/js/node_vendors~admin~api_docs~employee~marketing-f28010091bcdc040de06.chunk.js"></script>
-<script src="/packs/js/default~api_docs-662e892f249d5e883679.chunk.js"></script>
-<script src="/packs/js/api_docs-96a89e0fab370f2ec308.chunk.js"></script>
+  <link rel="stylesheet" href="/packs/css/default~api_docs-62d310b5.chunk.css" media="all" />
+    <script src="/packs/js/runtime~api_docs-7c9d93566fdae54ce2b0.js"></script>
+<script src="/packs/js/node_vendors~admin~api_docs~employee~marketing-3e5ecee0607a467750fe.chunk.js"></script>
+<script src="/packs/js/default~api_docs-d79cd8b7e6cf9e09d7a2.chunk.js"></script>
+<script src="/packs/js/api_docs-859b75bc56213da42b56.chunk.js"></script>
 </head>
 
 <body class="index" data-languages="[]">
 <a href="#" id="nav-button">
       <span>
         NAV
-        <img src="/packs/media/images/navbar-0eb89152aee5253e96a6e9433d08da9e.png" alt=""/>
+        <img src="/packs/media/images/navbar-3332a4dd4dc492578b21a922bba79453ab0aa9d9029b5b97588eac42fed78117.png" alt=""/>
       </span>
 </a>
 <div class="toc-wrapper">
     <div class="nav-header">
         <a href="//simplemdm.com/">
-            <img src="/packs/media/images/logo-4bbf06d6d51096cfae3746d8c7cbb898.svg" class="logo" alt=""/>
+            <img src="/packs/media/images/logo-e92d771a96f7bd45422e7dd5e99fa1187141b41c62d7506ea452f03799801d6f.svg" class="logo" alt=""/>
         </a>
-        <div class="version">API version 1.54</div>
+        <div class="version">API version 1.55</div>
     </div>
     <div class="search">
         <input type="text" class="search" id="input-search" placeholder="Search">
@@ -2190,6 +2190,7 @@ HTTP/1.1 204 No Content
                 "user_scope": true,
                 "attribute_support": false,
                 "escape_attributes": false,
+                "declarative": true,
                 "group_count": 2,
                 "device_count": 4
             },
@@ -2257,6 +2258,12 @@ HTTP/1.1 204 No Content
             after macOS software updates are detected.
         </td>
     </tr>
+    <tr>
+        <td>declarative</td>
+        <td>
+            Optional. A boolean true or false. When enabled, this profile will be installed using Declarative Management on any device that has Declarative Management enabled.
+        </td>
+    </tr>
     </tbody>
 </table>
 <h3 id='http-request-39'>HTTP Request</h3>
@@ -2303,6 +2310,12 @@ HTTP/1.1 204 No Content
         <td>reinstall_after_os_update</td>
         <td>Optional. A boolean true or false. When enabled, SimpleMDM will re-install the profile automatically
             after macOS software updates are detected.
+        </td>
+    </tr>
+    <tr>
+        <td>declarative</td>
+        <td>
+            Optional. A boolean true or false. When enabled, this profile will be installed using Declarative Management on any device that has Declarative Management enabled.
         </td>
     </tr>
     </tbody>
@@ -3691,6 +3704,54 @@ HTTP/1.1 202 Accepted
                     a T2 chip. A 6-digit number that the device will require to be unlocked.
                 </td>
             </tr>
+            <tr>
+                <td>clear_custom_attributes</td>
+                <td>Optional. A boolean true or false. Clears custom attribute values assigned to this device record.
+                    Defaults to false.
+                </td>
+            </tr>
+            <tr>
+                <td>disable_activation_lock</td>
+                <td>Optional. A boolean true or false. SimpleMDM attempts to disable Activation Lock
+                    before sending the wipe command if the device supports it. Defaults to true.
+                </td>
+            </tr>
+            <tr>
+                <td>preserve_data_plan</td>
+                <td>Optional. A boolean true or false. iOS only. When true, preserves the cellular data plan (including eSIM)
+                    on erase. Defaults to false.
+                </td>
+            </tr>
+            <tr>
+                <td>disallow_proximity_setup</td>
+                <td>Optional. A boolean true or false. iOS only. When true, the EraseDevice command includes
+                    DisallowProximitySetup. Defaults to false.
+                </td>
+            </tr>
+            <tr>
+                <td>return_to_service</td>
+                <td>Optional. A boolean true or false. iOS 17+ and tvOS 18+ only. When true, prepares return-to-service
+                    payloads; requires <code>wifi_network_id</code>. Defaults to false.
+                </td>
+            </tr>
+            <tr>
+                <td>wifi_network_id</td>
+                <td>Optional. Integer ID of a WiFi configuration profile assigned to the device. Required when
+                    <code>return_to_service</code> is true.
+                </td>
+            </tr>
+            <tr>
+                <td>obliteration_behavior</td>
+                <td>Optional. String. macOS 12+ with Erase All Content and Settings (T2 or Apple Silicon). One of
+                    <code>ObliterateWithWarning</code> (default if omitted) or <code>DoNotObliterate</code>.
+                </td>
+            </tr>
+            <tr>
+                <td>unassign_direct_profiles</td>
+                <td>Optional. A boolean true or false. Removes directly assigned profiles from the device record so they
+                    are not re-applied automatically after re-enrollment. Defaults to false.
+                </td>
+            </tr>
             </tbody>
         </table>
 
@@ -3850,6 +3911,22 @@ HTTP/1.1 202 Accepted
         <p>
             <code>POST https://a.simplemdm.com/api/v1/devices/{DEVICE_ID}/unenroll</code>
         </p>
+        <table>
+            <thead>
+            <tr>
+                <th>Argument</th>
+                <th>Description</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>unassign_direct_profiles</td>
+                <td>Optional. A boolean true or false. Removes directly assigned profiles from the device record so they
+                    are not re-applied automatically after re-enrollment. Defaults to false.
+                </td>
+            </tr>
+            </tbody>
+        </table>
 
         <h1 id='device-groups'><span class="badge">deprecated</span> Device Groups</h1>
 <p><p class="notice"><span class="badge">deprecated</span> The Device Groups API has been deprecated and is only available for backwards compatibility with existing API integrations. To use this endpoint, you must provide the legacy_device_group_id from a static group that was previously migrated from a legacy device group.</p>

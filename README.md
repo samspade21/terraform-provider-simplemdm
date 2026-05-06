@@ -130,6 +130,17 @@ objects in a SimpleMDM test tenant:
 | `SIMPLEMDM_PROFILE_ID` | Profile data source, assignment group resource | ID of a profile created via the SimpleMDM UI. |
 | `SIMPLEMDM_SCRIPT_ID` | Script data source | ID of an existing script. |
 | `SIMPLEMDM_SCRIPT_JOB_ID` | Script job data source | ID of an existing script job. |
+| `SIMPLEMDM_INSTALLED_APP_ID` | Installed app data source, installed app action resource | ID of an installed-app record (per device). |
+| `SIMPLEMDM_MUNKI_APP_ID` | Munki pkginfo resource | ID of a custom (non-App-Store) app that supports Munki pkginfo. |
+| `SIMPLEMDM_PUSH_CERT_PEM` | Push certificate resource | Filesystem path to a real APNs PEM file from Apple. |
+| `SIMPLEMDM_PUSH_CERT_APPLE_ID` | Push certificate resource | Optional Apple ID email used when uploading the push certificate. |
+| `SIMPLEMDM_DEP_SERVER_ID` | DEP server data source | ID of an existing DEP server (autodetected when not set). |
+
+Tests for resources that touch real-world hardware (DEP servers, installed apps,
+device commands, push certificates, custom declaration device assignments) skip
+gracefully when the corresponding fixture variables are not present, so the
+default acceptance run only requires `SIMPLEMDM_APIKEY`. See
+[`TESTING_GAPS.md`](./TESTING_GAPS.md) for the design rationale.
 
 Use [`scripts/discover-test-fixtures.sh`](./scripts/discover-test-fixtures.sh) to collect common fixture
 IDs automatically from your tenant and output `gh secret set` commands that match the CI workflow.

@@ -23,18 +23,18 @@ type DepServerListResponse struct {
 
 // DepServerData contains DEP server attributes.
 type DepServerData struct {
-	Type       string            `json:"type"`
-	ID         int               `json:"id"`
-	Attributes DepServerAttrs    `json:"attributes"`
+	Type       string         `json:"type"`
+	ID         int            `json:"id"`
+	Attributes DepServerAttrs `json:"attributes"`
 }
 
 // DepServerAttrs contains the attributes for a DEP server.
 type DepServerAttrs struct {
-	ServerName      string `json:"server_name"`
-	ServerUUID      string `json:"server_uuid"`
-	AdminID         int    `json:"admin_id"`
+	ServerName       string `json:"server_name"`
+	ServerUUID       string `json:"server_uuid"`
+	AdminID          int    `json:"admin_id"`
 	OrganizationName string `json:"organization_name"`
-	Cursor          string `json:"cursor"`
+	Cursor           string `json:"cursor"`
 	DevicesFetchedAt string `json:"devices_fetched_at"`
 }
 
@@ -53,15 +53,15 @@ type DepDeviceData struct {
 
 // DepDeviceAttrs contains the attributes for a DEP device.
 type DepDeviceAttrs struct {
-	SerialNumber    string `json:"serial_number"`
-	Model           string `json:"model"`
-	Color           string `json:"color"`
-	Description     string `json:"description"`
-	OS              string `json:"os"`
-	DeviceFamily    string `json:"device_family"`
-	ProfileStatus   string `json:"profile_status"`
-	ProfileAssignTime string `json:"profile_assign_time"`
-	ProfilePushTime  string `json:"profile_push_time"`
+	SerialNumber       string `json:"serial_number"`
+	Model              string `json:"model"`
+	Color              string `json:"color"`
+	Description        string `json:"description"`
+	OS                 string `json:"os"`
+	DeviceFamily       string `json:"device_family"`
+	ProfileStatus      string `json:"profile_status"`
+	ProfileAssignTime  string `json:"profile_assign_time"`
+	ProfilePushTime    string `json:"profile_push_time"`
 	DeviceAssignedDate string `json:"device_assigned_date"`
 	DeviceAssignedBy   string `json:"device_assigned_by"`
 }
@@ -126,6 +126,47 @@ func ListDepServers(ctx context.Context, client *simplemdm.Client) ([]DepServerD
 	}
 
 	return results, nil
+}
+
+// DepDeviceResponseSingle models a single DEP device response.
+type DepDeviceResponseSingle struct {
+	Data DepDeviceData `json:"data"`
+}
+
+// GetDepDevice retrieves a single DEP device by ID under a given DEP server.
+func GetDepDevice(ctx context.Context, client *simplemdm.Client, serverID, deviceID string) (*DepDeviceResponseSingle, error) {
+	url := fmt.Sprintf("https://%s/api/v1/dep_servers/%s/dep_devices/%s", client.HostName, serverID, deviceID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := client.RequestResponse200(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp DepDeviceResponseSingle
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// SyncDepServer triggers a sync of the given DEP server with Apple. The
+// SimpleMDM API responds 202 Accepted with no body.
+func SyncDepServer(ctx context.Context, client *simplemdm.Client, serverID string) error {
+	url := fmt.Sprintf("https://%s/api/v1/dep_servers/%s/sync", client.HostName, serverID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+
+	if _, err := client.RequestResponse202(req); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ListDepDevices retrieves all DEP devices for a given DEP server.
