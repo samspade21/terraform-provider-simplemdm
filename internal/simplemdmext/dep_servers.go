@@ -36,6 +36,8 @@ type DepServerAttrs struct {
 	OrganizationName string `json:"organization_name"`
 	Cursor           string `json:"cursor"`
 	DevicesFetchedAt string `json:"devices_fetched_at"`
+	TokenExpiresAt   string `json:"token_expires_at"`
+	LastSyncedAt     string `json:"last_synced_at"`
 }
 
 // DepDeviceResponse models the list of DEP devices for a server.

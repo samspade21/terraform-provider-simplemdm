@@ -15,7 +15,7 @@ func TestAccManagedConfigDataSource_basic(t *testing.T) {
 			{
 				Config: providerConfig + `
                                 resource "simplemdm_app" "testapp" {
-                                        app_store_id = "586447913"
+                                        app_store_id = "284882215"
                                 }
 
                                 resource "simplemdm_managed_config" "config" {

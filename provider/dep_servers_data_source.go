@@ -30,6 +30,8 @@ type depServerModel struct {
 	ServerUUID       types.String `tfsdk:"server_uuid"`
 	OrganizationName types.String `tfsdk:"organization_name"`
 	DevicesFetchedAt types.String `tfsdk:"devices_fetched_at"`
+	TokenExpiresAt   types.String `tfsdk:"token_expires_at"`
+	LastSyncedAt     types.String `tfsdk:"last_synced_at"`
 }
 
 func DepServersDataSource() datasource.DataSource {
@@ -68,6 +70,14 @@ func (d *depServersDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 							Computed:    true,
 							Description: "The timestamp when devices were last fetched from Apple.",
 						},
+						"token_expires_at": schema.StringAttribute{
+							Computed:    true,
+							Description: "Timestamp when the DEP token expires.",
+						},
+						"last_synced_at": schema.StringAttribute{
+							Computed:    true,
+							Description: "Timestamp of the most recent sync between SimpleMDM and Apple Business Manager.",
+						},
 					},
 				},
 			},
@@ -100,6 +110,8 @@ func (d *depServersDataSource) Read(ctx context.Context, req datasource.ReadRequ
 			ServerUUID:       types.StringValue(s.Attributes.ServerUUID),
 			OrganizationName: types.StringValue(s.Attributes.OrganizationName),
 			DevicesFetchedAt: types.StringValue(s.Attributes.DevicesFetchedAt),
+			TokenExpiresAt:   stringValueOrNull(s.Attributes.TokenExpiresAt),
+			LastSyncedAt:     stringValueOrNull(s.Attributes.LastSyncedAt),
 		})
 	}
 

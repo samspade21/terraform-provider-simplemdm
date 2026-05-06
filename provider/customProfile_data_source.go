@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -26,6 +27,7 @@ type customProfileDataSourceModel struct {
 	AttributeSupport       types.Bool   `tfsdk:"attribute_support"`
 	EscapeAttributes       types.Bool   `tfsdk:"escape_attributes"`
 	ReinstallAfterOSUpdate types.Bool   `tfsdk:"reinstall_after_os_update"`
+	Declarative            types.Bool   `tfsdk:"declarative"`
 	ProfileIdentifier      types.String `tfsdk:"profile_identifier"`
 	GroupCount             types.Int64  `tfsdk:"group_count"`
 	DeviceCount            types.Int64  `tfsdk:"device_count"`
@@ -80,6 +82,10 @@ func (d *customProfileDataSource) Schema(_ context.Context, _ datasource.SchemaR
 				Computed:    true,
 				Description: "Whether the profile reinstalls automatically after macOS updates.",
 			},
+			"declarative": schema.BoolAttribute{
+				Computed:    true,
+				Description: "Whether the profile is installed using Declarative Management on devices that support it.",
+			},
 			"profile_identifier": schema.StringAttribute{
 				Computed:    true,
 				Description: "Profile identifier assigned by SimpleMDM.",
@@ -106,9 +112,9 @@ func (d *customProfileDataSource) Read(ctx context.Context, req datasource.ReadR
 	diags := req.Config.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
-	// NOTE: CustomProfileGet uses GET /api/v1/custom_configuration_profiles/{id}
+	// NOTE: GetCustomProfile uses GET /api/v1/custom_configuration_profiles/{id}
 	// This endpoint is not documented in the API specification but is functional.
-	profile, err := d.client.CustomProfileGet(state.ID.ValueString())
+	profile, err := simplemdmext.GetCustomProfile(ctx, d.client, state.ID.ValueString())
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			resp.Diagnostics.AddError(
@@ -130,6 +136,7 @@ func (d *customProfileDataSource) Read(ctx context.Context, req datasource.ReadR
 	state.AttributeSupport = types.BoolValue(profile.Data.Attributes.AttributeSupport)
 	state.EscapeAttributes = types.BoolValue(profile.Data.Attributes.EscapeAttributes)
 	state.ReinstallAfterOSUpdate = types.BoolValue(profile.Data.Attributes.ReinstallAfterOsUpdate)
+	state.Declarative = types.BoolValue(profile.Data.Attributes.Declarative)
 	state.ProfileIdentifier = stringValueOrNull(profile.Data.Attributes.ProfileIdentifier)
 	state.GroupCount = types.Int64Value(int64(profile.Data.Attributes.GroupCount))
 	state.DeviceCount = types.Int64Value(int64(profile.Data.Attributes.DeviceCount))

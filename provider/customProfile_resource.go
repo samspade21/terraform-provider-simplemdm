@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -30,6 +31,7 @@ type customProfileResourceModel struct {
 	AttributeSupport       types.Bool   `tfsdk:"attribute_support"`
 	EscapeAttributes       types.Bool   `tfsdk:"escape_attributes"`
 	ReinstallAfterOSUpdate types.Bool   `tfsdk:"reinstall_after_os_update"`
+	Declarative            types.Bool   `tfsdk:"declarative"`
 	ProfileIdentifier      types.String `tfsdk:"profile_identifier"`
 	GroupCount             types.Int64  `tfsdk:"group_count"`
 	DeviceCount            types.Int64  `tfsdk:"device_count"`
@@ -107,6 +109,12 @@ func (r *customProfileResource) Schema(_ context.Context, _ resource.SchemaReque
 				Computed:    true,
 				Description: "Optional. A boolean true or false. When enabled, SimpleMDM will re-install the profile automatically after macOS software updates are detected. Defaults to false",
 			},
+			"declarative": schema.BoolAttribute{
+				Optional:    true,
+				Default:     booldefault.StaticBool(false),
+				Computed:    true,
+				Description: "Optional. A boolean true or false. When enabled, this profile will be installed using Declarative Management on any device that has Declarative Management enabled. Defaults to false.",
+			},
 			"profile_identifier": schema.StringAttribute{
 				Computed:    true,
 				Description: "Read-only profile identifier assigned by SimpleMDM.",
@@ -143,7 +151,15 @@ func (r *customProfileResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	// Generate API request body from plan
-	Profile, err := r.client.CustomProfileCreate(plan.Name.ValueString(), plan.MobileConfig.ValueString(), plan.UserScope.ValueBool(), plan.AttributeSupport.ValueBool(), plan.EscapeAttributes.ValueBool(), plan.ReinstallAfterOSUpdate.ValueBool())
+	Profile, err := simplemdmext.CreateCustomProfile(ctx, r.client, simplemdmext.CustomProfileCreatePayload{
+		Name:                   plan.Name.ValueString(),
+		MobileConfig:           plan.MobileConfig.ValueString(),
+		UserScope:              plan.UserScope.ValueBool(),
+		AttributeSupport:       plan.AttributeSupport.ValueBool(),
+		EscapeAttributes:       plan.EscapeAttributes.ValueBool(),
+		ReinstallAfterOsUpdate: plan.ReinstallAfterOSUpdate.ValueBool(),
+		Declarative:            plan.Declarative.ValueBool(),
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating SimpleMDM custom profile",
@@ -154,7 +170,7 @@ func (r *customProfileResource) Create(ctx context.Context, req resource.CreateR
 
 	// Map response body to schema and populate Computed attribute values
 	plan.ID = types.StringValue(strconv.Itoa(Profile.Data.ID))
-	assignCustomProfileAttributes(&plan, Profile.Data.Attributes)
+	assignCustomProfileExtendedAttributes(&plan, Profile.Data.Attributes)
 
 	sha, body, err := r.client.CustomProfileSHA(plan.ID.ValueString())
 	if err != nil {
@@ -185,9 +201,9 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	// NOTE: CustomProfileGet uses GET /api/v1/custom_configuration_profiles/{id}
+	// NOTE: GetCustomProfile uses GET /api/v1/custom_configuration_profiles/{id}
 	// This endpoint is not documented in the API specification but is functional.
-	profile, err := r.client.CustomProfileGet(state.ID.ValueString())
+	profile, err := simplemdmext.GetCustomProfile(ctx, r.client, state.ID.ValueString())
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			resp.State.RemoveResource(ctx)
@@ -201,7 +217,7 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	assignCustomProfileAttributes(&state, profile.Data.Attributes)
+	assignCustomProfileExtendedAttributes(&state, profile.Data.Attributes)
 	state.ID = types.StringValue(strconv.Itoa(profile.Data.ID))
 
 	// NOTE: CustomProfileSHA downloads the profile using GET /api/v1/custom_configuration_profiles/{id}/download
@@ -240,18 +256,15 @@ func (r *customProfileResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	// Generate API request body from plan
-	// NOTE: The 7th parameter (empty string) is a search parameter not used for single profile updates
-	_, err := r.client.CustomProfileUpdate(plan.Name.ValueString(), plan.MobileConfig.ValueString(), plan.UserScope.ValueBool(), plan.AttributeSupport.ValueBool(), plan.EscapeAttributes.ValueBool(), plan.ReinstallAfterOSUpdate.ValueBool(), "", plan.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error updating SimpleMDM custom profile",
-			"Could not update custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
-		)
-		return
-	}
-
-	profile, err := r.client.CustomProfileGet(plan.ID.ValueString())
+	profile, err := simplemdmext.UpdateCustomProfile(ctx, r.client, plan.ID.ValueString(), simplemdmext.CustomProfileCreatePayload{
+		Name:                   plan.Name.ValueString(),
+		MobileConfig:           plan.MobileConfig.ValueString(),
+		UserScope:              plan.UserScope.ValueBool(),
+		AttributeSupport:       plan.AttributeSupport.ValueBool(),
+		EscapeAttributes:       plan.EscapeAttributes.ValueBool(),
+		ReinstallAfterOsUpdate: plan.ReinstallAfterOSUpdate.ValueBool(),
+		Declarative:            plan.Declarative.ValueBool(),
+	})
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			resp.State.RemoveResource(ctx)
@@ -259,13 +272,13 @@ func (r *customProfileResource) Update(ctx context.Context, req resource.UpdateR
 		}
 
 		resp.Diagnostics.AddError(
-			"Error reading SimpleMDM custom profile",
-			"Could not read custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
+			"Error updating SimpleMDM custom profile",
+			"Could not update custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
 		)
 		return
 	}
 
-	assignCustomProfileAttributes(&plan, profile.Data.Attributes)
+	assignCustomProfileExtendedAttributes(&plan, profile.Data.Attributes)
 
 	sha, body, err := r.client.CustomProfileSHA(plan.ID.ValueString())
 	if err != nil {
@@ -310,12 +323,32 @@ func (r *customProfileResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 }
 
+// assignCustomProfileAttributes is retained for callers (e.g. the data source)
+// that still consume the upstream client struct. It does not populate the
+// `declarative` field; new code should use assignCustomProfileExtendedAttributes.
 func assignCustomProfileAttributes(model *customProfileResourceModel, attributes simplemdm.Attributes) {
 	model.Name = types.StringValue(attributes.Name)
 	model.UserScope = types.BoolValue(attributes.UserScope)
 	model.AttributeSupport = types.BoolValue(attributes.AttributeSupport)
 	model.EscapeAttributes = types.BoolValue(attributes.EscapeAttributes)
 	model.ReinstallAfterOSUpdate = types.BoolValue(attributes.ReinstallAfterOsUpdate)
+	model.ProfileIdentifier = stringValueOrNull(attributes.ProfileIdentifier)
+	model.GroupCount = types.Int64Value(int64(attributes.GroupCount))
+	model.DeviceCount = types.Int64Value(int64(attributes.DeviceCount))
+	if attributes.ProfileSHA != "" {
+		model.ProfileSHA = types.StringValue(attributes.ProfileSHA)
+	}
+}
+
+// assignCustomProfileExtendedAttributes copies the API attributes (including the
+// declarative flag) into the resource model.
+func assignCustomProfileExtendedAttributes(model *customProfileResourceModel, attributes simplemdmext.CustomProfileExtendedAttributes) {
+	model.Name = types.StringValue(attributes.Name)
+	model.UserScope = types.BoolValue(attributes.UserScope)
+	model.AttributeSupport = types.BoolValue(attributes.AttributeSupport)
+	model.EscapeAttributes = types.BoolValue(attributes.EscapeAttributes)
+	model.ReinstallAfterOSUpdate = types.BoolValue(attributes.ReinstallAfterOsUpdate)
+	model.Declarative = types.BoolValue(attributes.Declarative)
 	model.ProfileIdentifier = stringValueOrNull(attributes.ProfileIdentifier)
 	model.GroupCount = types.Int64Value(int64(attributes.GroupCount))
 	model.DeviceCount = types.Int64Value(int64(attributes.DeviceCount))

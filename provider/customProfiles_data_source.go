@@ -34,6 +34,7 @@ type customProfilesDataSourceProfileModel struct {
 	AttributeSupport       types.Bool   `tfsdk:"attribute_support"`
 	EscapeAttributes       types.Bool   `tfsdk:"escape_attributes"`
 	ReinstallAfterOSUpdate types.Bool   `tfsdk:"reinstall_after_os_update"`
+	Declarative            types.Bool   `tfsdk:"declarative"`
 	ProfileIdentifier      types.String `tfsdk:"profile_identifier"`
 	GroupCount             types.Int64  `tfsdk:"group_count"`
 	DeviceCount            types.Int64  `tfsdk:"device_count"`
@@ -85,6 +86,10 @@ func (d *customProfilesDataSource) Schema(_ context.Context, _ datasource.Schema
 							Computed:    true,
 							Description: "Whether the profile reinstalls automatically after macOS updates.",
 						},
+						"declarative": schema.BoolAttribute{
+							Computed:    true,
+							Description: "Whether the profile is installed using Declarative Management on devices that support it.",
+						},
 						"profile_identifier": schema.StringAttribute{
 							Computed:    true,
 							Description: "Profile identifier assigned by SimpleMDM.",
@@ -130,6 +135,7 @@ func (d *customProfilesDataSource) Read(ctx context.Context, req datasource.Read
 			AttributeSupport:       types.BoolValue(profile.Attributes.AttributeSupport),
 			EscapeAttributes:       types.BoolValue(profile.Attributes.EscapeAttributes),
 			ReinstallAfterOSUpdate: types.BoolValue(profile.Attributes.ReinstallAfterOsUpdate),
+			Declarative:            types.BoolValue(profile.Attributes.Declarative),
 			ProfileIdentifier:      stringValueOrNull(profile.Attributes.ProfileIdentifier),
 			GroupCount:             types.Int64Value(int64(profile.Attributes.GroupCount)),
 			DeviceCount:            types.Int64Value(int64(profile.Attributes.DeviceCount)),
@@ -228,6 +234,7 @@ type customProfileAttributes struct {
 	AttributeSupport       bool   `json:"attribute_support"`
 	EscapeAttributes       bool   `json:"escape_attributes"`
 	ReinstallAfterOsUpdate bool   `json:"reinstall_after_os_update"`
+	Declarative            bool   `json:"declarative"`
 	ProfileIdentifier      string `json:"profile_identifier"`
 	GroupCount             int    `json:"group_count"`
 	DeviceCount            int    `json:"device_count"`

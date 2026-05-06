@@ -22,6 +22,8 @@ type depServerDataSourceModel struct {
 	ServerUUID       types.String `tfsdk:"server_uuid"`
 	OrganizationName types.String `tfsdk:"organization_name"`
 	DevicesFetchedAt types.String `tfsdk:"devices_fetched_at"`
+	TokenExpiresAt   types.String `tfsdk:"token_expires_at"`
+	LastSyncedAt     types.String `tfsdk:"last_synced_at"`
 }
 
 func DepServerDataSource() datasource.DataSource {
@@ -60,6 +62,14 @@ func (d *depServerDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 				Computed:    true,
 				Description: "The timestamp when devices were last fetched from Apple.",
 			},
+			"token_expires_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the DEP token expires (token must be renewed in Apple Business Manager before this date).",
+			},
+			"last_synced_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp of the most recent sync between SimpleMDM and Apple Business Manager.",
+			},
 		},
 	}
 }
@@ -86,6 +96,8 @@ func (d *depServerDataSource) Read(ctx context.Context, req datasource.ReadReque
 	state.ServerUUID = types.StringValue(server.Data.Attributes.ServerUUID)
 	state.OrganizationName = types.StringValue(server.Data.Attributes.OrganizationName)
 	state.DevicesFetchedAt = types.StringValue(server.Data.Attributes.DevicesFetchedAt)
+	state.TokenExpiresAt = stringValueOrNull(server.Data.Attributes.TokenExpiresAt)
+	state.LastSyncedAt = stringValueOrNull(server.Data.Attributes.LastSyncedAt)
 
 	diags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
