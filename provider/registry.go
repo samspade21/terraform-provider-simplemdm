@@ -122,12 +122,12 @@ var resourceDefinitions = []ResourceDefinition{
 		TestsOptional: true,
 	},
 	{
-		TypeName:     "simplemdm_devicegroup",
-		Factory:      DeviceGroupResource,
-		DocsPath:     "docs/resources/devicegroup.md",
-		ExampleDirs:  []string{"examples/resources/simplemdm_devicegroup"},
-		TestFiles:    []string{"provider/deviceGroup_resource_test.go"},
-		APIEndpoints: []string{"/api/v1/device_groups"},
+		TypeName:      "simplemdm_devicegroup",
+		Factory:       DeviceGroupResource,
+		DocsPath:      "docs/resources/devicegroup.md",
+		ExampleDirs:   []string{"examples/resources/simplemdm_devicegroup"},
+		TestsOptional: true, // Create/Delete unsupported by API; resource is read-only.
+		APIEndpoints:  []string{"/api/v1/device_groups"},
 	},
 	{
 		TypeName:    "simplemdm_enrollment",

@@ -11,7 +11,7 @@ import (
 // can call the bulk-set API with a real target. Skips if not supplied.
 func TestAccCustomAttributeBulkValueResource(t *testing.T) {
 	testAccPreCheck(t)
-	deviceID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_ID")
+	deviceID := findFirstDeviceID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

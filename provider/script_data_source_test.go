@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -10,18 +9,27 @@ import (
 func TestAccScriptDataSource(t *testing.T) {
 	testAccPreCheck(t)
 
-	scriptID := testAccRequireEnv(t, "SIMPLEMDM_SCRIPT_ID")
-
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Read testing
 			{
-				Config: providerConfig + fmt.Sprintf(`data "simplemdm_script" "test" {id ="%s"}`, scriptID),
+				Config: providerConfig + `
+resource "simplemdm_script" "test" {
+  name             = "tf_acc_test_script"
+  variable_support = false
+  content          = <<-EOT
+		#!/bin/bash
+		echo "hello from acceptance test"
+		EOT
+}
+
+data "simplemdm_script" "test" {
+  id = simplemdm_script.test.id
+}
+`,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify attributes
-					resource.TestCheckResourceAttr("data.simplemdm_script.test", "id", scriptID),
-					resource.TestCheckResourceAttrSet("data.simplemdm_script.test", "name"),
+					resource.TestCheckResourceAttrPair("data.simplemdm_script.test", "id", "simplemdm_script.test", "id"),
+					resource.TestCheckResourceAttr("data.simplemdm_script.test", "name", "tf_acc_test_script"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_script.test", "content"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_script.test", "variable_support"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_script.test", "created_at"),

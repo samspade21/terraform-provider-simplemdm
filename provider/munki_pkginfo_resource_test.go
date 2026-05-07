@@ -28,7 +28,7 @@ const sampleMunkiPkgInfo = `<?xml version="1.0" encoding="UTF-8"?>
 // unless SIMPLEMDM_MUNKI_APP_ID is set.
 func TestAccMunkiPkgInfoResource(t *testing.T) {
 	testAccPreCheck(t)
-	appID := testAccRequireEnv(t, "SIMPLEMDM_MUNKI_APP_ID")
+	appID := findFirstMunkiAppID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

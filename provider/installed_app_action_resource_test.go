@@ -12,7 +12,7 @@ import (
 // cannot synthesize installed-app records.
 func TestAccInstalledAppActionResource(t *testing.T) {
 	testAccPreCheck(t)
-	installedAppID := testAccRequireEnv(t, "SIMPLEMDM_INSTALLED_APP_ID")
+	installedAppID := findFirstInstalledAppID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

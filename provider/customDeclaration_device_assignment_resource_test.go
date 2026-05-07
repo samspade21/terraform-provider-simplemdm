@@ -60,7 +60,7 @@ func testAccCheckCustomDeclarationDeviceAssignmentDestroy(s *terraform.State) er
 
 func TestAccCustomDeclarationDeviceAssignmentResource(t *testing.T) {
 	testAccPreCheck(t)
-	deviceID := testAccRequireEnv(t, "SIMPLEMDM_CUSTOM_DECLARATION_DEVICE_ID")
+	deviceID := findFirstDeviceID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

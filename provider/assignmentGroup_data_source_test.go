@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -10,22 +9,22 @@ import (
 func TestAccAssignmentGroupDataSource(t *testing.T) {
 	testAccPreCheck(t)
 
-	assignmentGroupID := testAccRequireEnv(t, "SIMPLEMDM_ASSIGNMENT_GROUP_ID")
-
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: providerConfig + fmt.Sprintf(`
-                data "simplemdm_assignmentgroup" "test" {
-                  id = "%s"
-                }
-                `, assignmentGroupID),
+				Config: providerConfig + `
+resource "simplemdm_assignmentgroup" "test" {
+  name = "tf_acc_assignmentgroup_data_source"
+}
+
+data "simplemdm_assignmentgroup" "test" {
+  id = simplemdm_assignmentgroup.test.id
+}
+`,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.simplemdm_assignmentgroup.test", "id", assignmentGroupID),
-					// created_at and updated_at may be empty depending on API version
-					// Just verify the fields exist in schema
-					resource.TestCheckResourceAttrSet("data.simplemdm_assignmentgroup.test", "name"),
+					resource.TestCheckResourceAttrPair("data.simplemdm_assignmentgroup.test", "id", "simplemdm_assignmentgroup.test", "id"),
+					resource.TestCheckResourceAttr("data.simplemdm_assignmentgroup.test", "name", "tf_acc_assignmentgroup_data_source"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_assignmentgroup.test", "group_type"),
 				),
 			},

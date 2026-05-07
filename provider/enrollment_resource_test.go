@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	simplemdm "github.com/DavidKrau/simplemdm-go-client"
@@ -17,37 +16,39 @@ func testAccCheckEnrollmentDestroy(s *terraform.State) error {
 	})(s)
 }
 
+// TestAccEnrollmentResource creates an enrollment against an existing legacy
+// device group, exercising the invitation update path with hardcoded test
+// contacts. The /enrollments endpoint rejects both freshly-created assignment
+// groups and arbitrary legacy device groups with 404, so the device group ID
+// must be supplied explicitly via SIMPLEMDM_DEVICE_GROUP_ID. The test skips
+// cleanly when that var isn't set.
 func TestAccEnrollmentResource(t *testing.T) {
 	testAccPreCheck(t)
 
-	// Enrollments require actual device groups which cannot be created via API
-	// Skip this test if no device group ID is available
-	deviceGroupID := testAccGetEnv(t, "SIMPLEMDM_DEVICE_GROUP_ID")
-	if deviceGroupID == "" {
-		t.Skip("SIMPLEMDM_DEVICE_GROUP_ID not set - skipping test as enrollments require actual device groups which cannot be created via API")
-	}
+	deviceGroupID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_GROUP_ID")
 
-	// Get the required contact email (still needed as it's user-specific)
-	invitationContact := testAccRequireEnv(t, "SIMPLEMDM_ENROLLMENT_CONTACT")
+	const (
+		initialContact = "tf-acc-test@example.com"
+		updatedContact = "tf-acc-test-updated@example.com"
+	)
 
 	steps := []resource.TestStep{
 		{
 			Config: providerConfig + `
-				# Use existing device group (cannot be created via API)
-				resource "simplemdm_enrollment" "test" {
-					device_group_id    = "` + deviceGroupID + `"
-					user_enrollment    = false
-					welcome_screen     = true
-					authentication     = false
-					invitation_contact = "` + invitationContact + `"
-				}
-			`,
+resource "simplemdm_enrollment" "test" {
+  device_group_id    = "` + deviceGroupID + `"
+  user_enrollment    = false
+  welcome_screen     = true
+  authentication     = false
+  invitation_contact = "` + initialContact + `"
+}
+`,
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("simplemdm_enrollment.test", "user_enrollment", "false"),
 				resource.TestCheckResourceAttr("simplemdm_enrollment.test", "device_group_id", deviceGroupID),
 				resource.TestCheckResourceAttr("simplemdm_enrollment.test", "welcome_screen", "true"),
 				resource.TestCheckResourceAttr("simplemdm_enrollment.test", "authentication", "false"),
-				resource.TestCheckResourceAttr("simplemdm_enrollment.test", "invitation_contact", invitationContact),
+				resource.TestCheckResourceAttr("simplemdm_enrollment.test", "invitation_contact", initialContact),
 				resource.TestCheckResourceAttrSet("simplemdm_enrollment.test", "id"),
 			),
 		},
@@ -59,43 +60,35 @@ func TestAccEnrollmentResource(t *testing.T) {
 				"invitation_contact",
 			},
 		},
-	}
-
-	// Optional: test updating the invitation contact if provided
-	if updatedContact := os.Getenv("SIMPLEMDM_ENROLLMENT_CONTACT_UPDATE"); updatedContact != "" {
-		steps = append(steps, resource.TestStep{
+		{
 			Config: providerConfig + `
-				# Update enrollment with new contact
-				resource "simplemdm_enrollment" "test" {
-					device_group_id    = "` + deviceGroupID + `"
-					user_enrollment    = false
-					welcome_screen     = true
-					authentication     = false
-					invitation_contact = "` + updatedContact + `"
-				}
-			`,
+resource "simplemdm_enrollment" "test" {
+  device_group_id    = "` + deviceGroupID + `"
+  user_enrollment    = false
+  welcome_screen     = true
+  authentication     = false
+  invitation_contact = "` + updatedContact + `"
+}
+`,
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("simplemdm_enrollment.test", "device_group_id", deviceGroupID),
 				resource.TestCheckResourceAttr("simplemdm_enrollment.test", "invitation_contact", updatedContact),
 			),
-		})
+		},
+		{
+			Config: providerConfig + `
+resource "simplemdm_enrollment" "test" {
+  device_group_id = "` + deviceGroupID + `"
+  user_enrollment = false
+  welcome_screen  = true
+  authentication  = false
+}
+`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckNoResourceAttr("simplemdm_enrollment.test", "invitation_contact"),
+			),
+		},
 	}
-
-	// Test removing the invitation contact
-	steps = append(steps, resource.TestStep{
-		Config: providerConfig + `
-			# Remove invitation contact
-			resource "simplemdm_enrollment" "test" {
-				device_group_id = "` + deviceGroupID + `"
-				user_enrollment = false
-				welcome_screen  = true
-				authentication  = false
-			}
-		`,
-		Check: resource.ComposeAggregateTestCheckFunc(
-			resource.TestCheckNoResourceAttr("simplemdm_enrollment.test", "invitation_contact"),
-		),
-	})
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

@@ -19,7 +19,7 @@ import (
 // and cannot be read back from the API. The resource only maintains local state.
 func TestAccDeviceCommandResource_PushApps(t *testing.T) {
 	testAccPreCheck(t)
-	deviceID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_ID")
+	deviceID := findFirstDeviceID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -50,7 +50,7 @@ func TestAccDeviceCommandResource_PushApps(t *testing.T) {
 //   - The device must be enrolled and active in SimpleMDM
 func TestAccDeviceCommandResource_Refresh(t *testing.T) {
 	testAccPreCheck(t)
-	deviceID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_ID")
+	deviceID := findFirstDeviceID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -77,7 +77,7 @@ func TestAccDeviceCommandResource_Refresh(t *testing.T) {
 //   - WARNING: This will lock the device and may require physical access to unlock
 func TestAccDeviceCommandResource_Lock(t *testing.T) {
 	testAccPreCheck(t)
-	deviceID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_ID")
+	deviceID := findFirstDeviceID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -105,7 +105,7 @@ func TestAccDeviceCommandResource_Lock(t *testing.T) {
 // results in an appropriate error.
 func TestAccDeviceCommandResource_InvalidCommand(t *testing.T) {
 	testAccPreCheck(t)
-	deviceID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_ID")
+	deviceID := findFirstDeviceID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -127,7 +127,7 @@ func TestAccDeviceCommandResource_InvalidCommand(t *testing.T) {
 //   - WARNING: This will enable lost mode on the device
 func TestAccDeviceCommandResource_LostMode(t *testing.T) {
 	testAccPreCheck(t)
-	deviceID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_ID")
+	deviceID := findFirstDeviceID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -156,7 +156,7 @@ func TestAccDeviceCommandResource_LostMode(t *testing.T) {
 // parameters fail appropriately when the parameter is missing.
 func TestAccDeviceCommandResource_RequiredParameter(t *testing.T) {
 	testAccPreCheck(t)
-	deviceID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_ID")
+	deviceID := findFirstDeviceID(t)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

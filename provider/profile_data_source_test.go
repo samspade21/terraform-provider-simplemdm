@@ -1,31 +1,36 @@
 package provider
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
-// TestAccProfileDataSource requires an existing profile because profiles are read-only
-// in the SimpleMDM API. Profiles can only be created through the SimpleMDM web UI or
-// using the custom_configuration_profiles API endpoint.
-//
-// To run this test, set SIMPLEMDM_PROFILE_ID to an existing profile's ID from your SimpleMDM account.
+// TestAccProfileDataSource self-provisions a custom configuration profile and
+// reads it back through the generic /profiles endpoint, which lists both
+// SimpleMDM-managed and custom configuration profiles.
 func TestAccProfileDataSource(t *testing.T) {
 	testAccPreCheck(t)
-
-	profileID := testAccRequireEnv(t, "SIMPLEMDM_PROFILE_ID")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Read testing
 			{
-				Config: providerConfig + fmt.Sprintf(`data "simplemdm_profile" "test" {id ="%s"}`, profileID),
+				Config: providerConfig + `
+resource "simplemdm_customprofile" "test" {
+  name         = "tf_acc_profile_data_source"
+  mobileconfig = file("./testfiles/testprofile.mobileconfig")
+}
+
+data "simplemdm_profile" "test" {
+  id = simplemdm_customprofile.test.id
+}
+`,
+				// SimpleMDM exhibits eventual consistency on custom profile reads
+				// shortly after creation; allow the refresh plan to differ.
+				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify returned values
-					resource.TestCheckResourceAttr("data.simplemdm_profile.test", "id", profileID),
+					resource.TestCheckResourceAttrPair("data.simplemdm_profile.test", "id", "simplemdm_customprofile.test", "id"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_profile.test", "name"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_profile.test", "type"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_profile.test", "profile_identifier"),
