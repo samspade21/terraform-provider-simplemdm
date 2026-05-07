@@ -57,7 +57,6 @@ go generate ./...
 | [`internal/`](./internal/) | Helper packages that support the provider. |
 | [`docs/`](./docs/) | Terraform Plugin Docs output used by the Terraform Registry. |
 | [`examples/`](./examples/) | Working configuration snippets for the provider. |
-| [`scripts/`](./scripts/) | Utility scripts, including fixture discovery helpers for tests. |
 
 ## Development workflow
 
@@ -141,10 +140,6 @@ A few tests need a specific fixture that auto-discovery can't reliably pick:
 | `SIMPLEMDM_DEVICE_GROUP_ID` | `simplemdm_enrollment` resource + data source, `simplemdm_scriptjob` resource | The `/enrollments` and `/script_jobs` endpoints reject newly-created assignment groups *and* arbitrary auto-discovered legacy device groups — they need a specific group registered as enrollment-eligible by SimpleMDM. |
 | `SIMPLEMDM_PUSH_CERT_PEM` | `simplemdm_push_certificate` resource | Only Apple can issue a real APNs PEM; there's nothing to discover. |
 | `SIMPLEMDM_PUSH_CERT_APPLE_ID` | `simplemdm_push_certificate` resource | Pairs with `SIMPLEMDM_PUSH_CERT_PEM`; the Apple ID the cert was generated under. |
-
-Use [`scripts/discover-test-fixtures.sh`](./scripts/discover-test-fixtures.sh)
-to harvest fixture IDs from your tenant and emit `gh secret set` commands for
-the CI workflow.
 
 ## Known issues
 
