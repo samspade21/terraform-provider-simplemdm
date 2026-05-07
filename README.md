@@ -139,8 +139,7 @@ objects in a SimpleMDM test tenant:
 Tests for resources that touch real-world hardware (DEP servers, installed apps,
 device commands, push certificates, custom declaration device assignments) skip
 gracefully when the corresponding fixture variables are not present, so the
-default acceptance run only requires `SIMPLEMDM_APIKEY`. See
-[`TESTING_GAPS.md`](./TESTING_GAPS.md) for the design rationale.
+default acceptance run only requires `SIMPLEMDM_APIKEY`.
 
 Use [`scripts/discover-test-fixtures.sh`](./scripts/discover-test-fixtures.sh) to collect common fixture
 IDs automatically from your tenant and output `gh secret set` commands that match the CI workflow.
