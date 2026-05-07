@@ -65,6 +65,7 @@ EOT
 ### Optional
 
 - `attribute_support` (Boolean) Optional. A boolean true or false. When enabled, SimpleMDM will process variables in the uploaded profile. Defaults to false
+- `declarative` (Boolean) Optional. A boolean true or false. When enabled, this profile will be installed using Declarative Management on any device that has Declarative Management enabled. Defaults to false.
 - `escape_attributes` (Boolean) Optional. A boolean true or false. When enabled, SimpleMDM escape the values of the custom variables in the uploaded profile. Defaults to false
 - `reinstall_after_os_update` (Boolean) Optional. A boolean true or false. When enabled, SimpleMDM will re-install the profile automatically after macOS software updates are detected. Defaults to false
 - `user_scope` (Boolean) Optional. A boolean true or false. If false, deploy as a device profile instead of a user profile for macOS devices. Defaults to true.

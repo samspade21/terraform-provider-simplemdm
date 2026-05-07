@@ -52,6 +52,7 @@ output "custom_profile_details" {
 ### Read-Only
 
 - `attribute_support` (Boolean) Indicates whether variable substitution is enabled for the profile.
+- `declarative` (Boolean) Whether the profile is installed using Declarative Management on devices that support it.
 - `device_count` (Number) Number of devices currently assigned to this profile.
 - `escape_attributes` (Boolean) Indicates whether custom attribute values are escaped when substituted into the profile.
 - `group_count` (Number) Number of device groups currently assigned to this profile.

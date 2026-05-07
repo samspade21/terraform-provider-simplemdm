@@ -33,9 +33,9 @@ output "log_count" {
 Read-Only:
 
 - `at` (String) The timestamp when the log entry was created.
+- `event_type` (String) The event type of the log entry (e.g. 'user.signed_in', 'script.ran').
 - `id` (String) The unique identifier of the log entry.
 - `level` (String) The severity level of the log entry.
 - `message` (String) The log message.
 - `namespace` (String) The namespace of the log entry (e.g., 'mdm', 'user').
 - `source` (String) The source of the log entry.
-- `type` (String) The type of the log entry.

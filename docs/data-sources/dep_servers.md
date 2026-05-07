@@ -34,6 +34,8 @@ Read-Only:
 
 - `devices_fetched_at` (String) The timestamp when devices were last fetched from Apple.
 - `id` (String) The unique identifier of the DEP server.
+- `last_synced_at` (String) Timestamp of the most recent sync between SimpleMDM and Apple Business Manager.
 - `organization_name` (String) The organization name from Apple Business Manager.
 - `server_name` (String) The name of the DEP server.
 - `server_uuid` (String) The UUID of the DEP server from Apple Business Manager.
+- `token_expires_at` (String) Timestamp when the DEP token expires.

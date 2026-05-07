@@ -30,6 +30,7 @@ output "dep_enabled" {
 ### Read-Only
 
 - `app_updates_enabled` (Boolean) Whether automatic app updates are enabled.
+- `apple_store_country_code` (String) The Apple App Store country code (e.g., US, AU) used for app catalog operations.
 - `carrier_activation` (Boolean) Whether carrier activation is enabled for the account.
 - `default_device_group_id` (String) The ID of the default device group for newly enrolled devices.
 - `dep_enabled` (Boolean) Whether Apple DEP (Device Enrollment Program) is enabled.
