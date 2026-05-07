@@ -323,23 +323,6 @@ func (r *customProfileResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 }
 
-// assignCustomProfileAttributes is retained for callers (e.g. the data source)
-// that still consume the upstream client struct. It does not populate the
-// `declarative` field; new code should use assignCustomProfileExtendedAttributes.
-func assignCustomProfileAttributes(model *customProfileResourceModel, attributes simplemdm.Attributes) {
-	model.Name = types.StringValue(attributes.Name)
-	model.UserScope = types.BoolValue(attributes.UserScope)
-	model.AttributeSupport = types.BoolValue(attributes.AttributeSupport)
-	model.EscapeAttributes = types.BoolValue(attributes.EscapeAttributes)
-	model.ReinstallAfterOSUpdate = types.BoolValue(attributes.ReinstallAfterOsUpdate)
-	model.ProfileIdentifier = stringValueOrNull(attributes.ProfileIdentifier)
-	model.GroupCount = types.Int64Value(int64(attributes.GroupCount))
-	model.DeviceCount = types.Int64Value(int64(attributes.DeviceCount))
-	if attributes.ProfileSHA != "" {
-		model.ProfileSHA = types.StringValue(attributes.ProfileSHA)
-	}
-}
-
 // assignCustomProfileExtendedAttributes copies the API attributes (including the
 // declarative flag) into the resource model.
 func assignCustomProfileExtendedAttributes(model *customProfileResourceModel, attributes simplemdmext.CustomProfileExtendedAttributes) {

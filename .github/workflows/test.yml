@@ -98,24 +98,17 @@ jobs:
       - name: Run tests
         env:
           TF_ACC: "1"
+          # Required: API key for the test tenant. All other fixtures are
+          # auto-discovered or self-provisioned by the tests.
           SIMPLEMDM_APIKEY: ${{ secrets.SIMPLEMDM_APIKEY }}
-          # Fixture IDs for data source tests
-          SIMPLEMDM_APP_ID: ${{ secrets.SIMPLEMDM_APP_ID }}
-          SIMPLEMDM_ASSIGNMENT_GROUP_ID: ${{ secrets.SIMPLEMDM_ASSIGNMENT_GROUP_ID }}
-          SIMPLEMDM_ATTRIBUTE_NAME: ${{ secrets.SIMPLEMDM_ATTRIBUTE_NAME }}
-          SIMPLEMDM_CUSTOM_PROFILE_ID: ${{ secrets.SIMPLEMDM_CUSTOM_PROFILE_ID }}
-          SIMPLEMDM_CUSTOM_DECLARATION_ID: ${{ secrets.SIMPLEMDM_CUSTOM_DECLARATION_ID }}
+          # Optional: gates the simplemdm_enrollment + simplemdm_scriptjob
+          # resource tests. The /enrollments and /script_jobs endpoints reject
+          # both freshly-created assignment groups and arbitrary auto-discovered
+          # legacy device groups, so a known-eligible group must be pinned.
           SIMPLEMDM_DEVICE_GROUP_ID: ${{ secrets.SIMPLEMDM_DEVICE_GROUP_ID }}
-          SIMPLEMDM_DEVICE_ID: ${{ secrets.SIMPLEMDM_DEVICE_ID }}
-          SIMPLEMDM_ENROLLMENT_ID: ${{ secrets.SIMPLEMDM_ENROLLMENT_ID }}
-          SIMPLEMDM_PROFILE_ID: ${{ secrets.SIMPLEMDM_PROFILE_ID }}
-          SIMPLEMDM_SCRIPT_ID: ${{ secrets.SIMPLEMDM_SCRIPT_ID }}
-          SIMPLEMDM_SCRIPT_JOB_ID: ${{ secrets.SIMPLEMDM_SCRIPT_JOB_ID }}
-          SIMPLEMDM_MANAGED_APP_ID: ${{ secrets.SIMPLEMDM_MANAGED_APP_ID }}
-          # Fixture IDs for resource tests
-          SIMPLEMDM_DEVICE_GROUP_CLONE_SOURCE_ID: ${{ secrets.SIMPLEMDM_DEVICE_GROUP_CLONE_SOURCE_ID }}
-          SIMPLEMDM_ENROLLMENT_CONTACT: ${{ secrets.SIMPLEMDM_ENROLLMENT_CONTACT }}
-          SIMPLEMDM_CUSTOM_DECLARATION_DEVICE_ID: ${{ secrets.SIMPLEMDM_CUSTOM_DECLARATION_DEVICE_ID }}
-          SIMPLEMDM_DEP_SERVER_ID: ${{ secrets.SIMPLEMDM_DEP_SERVER_ID }}
+          # Optional: gates simplemdm_push_certificate. Real APNs cert from
+          # Apple; impossible to discover or fabricate.
+          SIMPLEMDM_PUSH_CERT_PEM: ${{ secrets.SIMPLEMDM_PUSH_CERT_PEM }}
+          SIMPLEMDM_PUSH_CERT_APPLE_ID: ${{ secrets.SIMPLEMDM_PUSH_CERT_APPLE_ID }}
         run: go test -v -cover ./provider/... ./internal/...
         timeout-minutes: 20
