@@ -91,58 +91,117 @@ Run the hooks manually across the entire repository with `pre-commit run --all-f
 
 ### Acceptance tests
 
-Acceptance tests are located under [`provider/`](./provider/) and can be run with:
+Acceptance tests live under [`provider/`](./provider/). The default run only
+needs the API credentials:
 
 ```bash
 TF_ACC=1 SIMPLEMDM_APIKEY="your-api-key" go test -v -cover ./provider/
 ```
 
-The suite skips tests automatically when required fixtures are missing, allowing day-to-day
-development to rely on dynamic coverage while CI can opt into additional cases by
-setting the appropriate environment variables. GitHub Actions runs the same command in
+Tests requiring tenant-specific fixtures (devices, push certificates, etc.)
+call `testAccRequireEnv` and skip cleanly when the relevant variable is unset.
+GitHub Actions runs the same command in
 [`.github/workflows/test.yml`](.github/workflows/test.yml).
 
-#### Fixture environment variables
+#### Required (always)
 
-The following optional variables unlock additional tests. Values should reference existing
-objects in a SimpleMDM test tenant:
+| Variable | Purpose |
+|----------|---------|
+| `TF_ACC` | Set to `1` to opt in to acceptance tests at all. Without it every test skips. |
+| `SIMPLEMDM_APIKEY` | API key for the test tenant. Without it every acceptance test skips. |
+| `SIMPLEMDM_HOST` | Optional. Defaults to `a.simplemdm.com`. |
 
-| Variable | Used by | Purpose |
-|----------|---------|---------|
-| `SIMPLEMDM_APP_ID` | App data source, assignment group resource | ID of an app available to your tenant. |
-| `SIMPLEMDM_ASSIGNMENT_GROUP_ID` | Assignment group data source and resource | Fixture assignment group (device groups are deprecated). |
-| `SIMPLEMDM_ATTRIBUTE_NAME` | Attribute data source | Name of an existing custom attribute. |
-| `SIMPLEMDM_CUSTOM_DECLARATION_DEVICE_ID` | Custom declaration device assignment resource | Device capable of receiving DDM declarations. |
-| `SIMPLEMDM_DEVICE_GROUP_ID` | Device group data source, enrollment and script job resources | Existing device group when cloning or referencing real groups. |
-| `SIMPLEMDM_DEVICE_GROUP_CLONE_SOURCE_ID` | Device group resource | Source device group for clone operations. |
-| `SIMPLEMDM_DEVICE_GROUP_NAME` | Device group resource | Name reused across updates during acceptance tests. |
-| `SIMPLEMDM_DEVICE_GROUP_ATTRIBUTE_KEY` | Device group resource | Attribute key validated during updates. |
-| `SIMPLEMDM_DEVICE_GROUP_ATTRIBUTE_VALUE` | Device group resource | Initial attribute value. |
-| `SIMPLEMDM_DEVICE_GROUP_ATTRIBUTE_UPDATED_VALUE` | Device group resource | Updated attribute value. |
-| `SIMPLEMDM_DEVICE_GROUP_PROFILE_ID` | Device and device group resources | Profile assigned during tests. |
-| `SIMPLEMDM_DEVICE_GROUP_PROFILE_UPDATED_ID` | Device and device group resources | Updated profile reference. |
-| `SIMPLEMDM_DEVICE_GROUP_CUSTOM_PROFILE_ID` | Device and device group resources | Custom profile assigned during tests. |
-| `SIMPLEMDM_DEVICE_GROUP_CUSTOM_PROFILE_UPDATED_ID` | Device and device group resources | Updated custom profile reference. |
-| `SIMPLEMDM_DEVICE_ID` | Device data source, device command resource, script job data source | ID of an enrolled device. Required for device-centric commands. |
-| `SIMPLEMDM_ENROLLMENT_CONTACT` | Enrollment resource | Contact email or phone used to create an enrollment invitation. |
-| `SIMPLEMDM_ENROLLMENT_CONTACT_UPDATE` | Enrollment resource | Optional updated contact value to exercise update paths. |
-| `SIMPLEMDM_ENROLLMENT_ID` | Enrollment data source | ID of an existing enrollment. |
-| `SIMPLEMDM_PROFILE_ID` | Profile data source, assignment group resource | ID of a profile created via the SimpleMDM UI. |
-| `SIMPLEMDM_SCRIPT_ID` | Script data source | ID of an existing script. |
-| `SIMPLEMDM_SCRIPT_JOB_ID` | Script job data source | ID of an existing script job. |
-| `SIMPLEMDM_INSTALLED_APP_ID` | Installed app data source, installed app action resource | ID of an installed-app record (per device). |
-| `SIMPLEMDM_MUNKI_APP_ID` | Munki pkginfo resource | ID of a custom (non-App-Store) app that supports Munki pkginfo. |
-| `SIMPLEMDM_PUSH_CERT_PEM` | Push certificate resource | Filesystem path to a real APNs PEM file from Apple. |
-| `SIMPLEMDM_PUSH_CERT_APPLE_ID` | Push certificate resource | Optional Apple ID email used when uploading the push certificate. |
-| `SIMPLEMDM_DEP_SERVER_ID` | DEP server data source | ID of an existing DEP server (autodetected when not set). |
+#### Optional fixtures
 
-Tests for resources that touch real-world hardware (DEP servers, installed apps,
-device commands, push certificates, custom declaration device assignments) skip
-gracefully when the corresponding fixture variables are not present, so the
-default acceptance run only requires `SIMPLEMDM_APIKEY`.
+Fixture variables unlock additional acceptance tests. Each one references an
+existing object in the test tenant; tests that need it are listed under
+"Unlocks". Tests that don't reference a fixture self-provision their own
+resources during the run.
 
-Use [`scripts/discover-test-fixtures.sh`](./scripts/discover-test-fixtures.sh) to collect common fixture
-IDs automatically from your tenant and output `gh secret set` commands that match the CI workflow.
+##### Apps & assignment groups
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_APP_ID` | `simplemdm_app` data source; `simplemdm_assignmentgroup` resource update path. | ID of any existing app. |
+| `SIMPLEMDM_ASSIGNMENT_GROUP_ID` | `simplemdm_assignmentgroup` resource and data source. | ID of an assignment group (the modern replacement for device groups). |
+| `SIMPLEMDM_PROFILE_ID` | `simplemdm_profile` data source; `simplemdm_assignmentgroup` resource. | ID of a profile created in the SimpleMDM UI. |
+
+##### Custom attributes
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_ATTRIBUTE_NAME` | `simplemdm_attribute` data source. | Name of an existing custom attribute. |
+
+##### Custom declarations
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_CUSTOM_DECLARATION_DEVICE_ID` | `simplemdm_customdeclaration_device_assignment` resource. | Device capable of receiving DDM declarations. |
+
+##### Device groups (legacy)
+
+These tests cover the deprecated `simplemdm_devicegroup` resource. New
+deployments should use `simplemdm_assignmentgroup` instead.
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_DEVICE_GROUP_ID` | `simplemdm_devicegroup` data source; `simplemdm_device`, `simplemdm_enrollment`, `simplemdm_scriptjob` resources. | Existing legacy device group ID. |
+| `SIMPLEMDM_DEVICE_GROUP_CLONE_SOURCE_ID` | `simplemdm_devicegroup` resource clone path. | Source group used for the clone test. |
+| `SIMPLEMDM_DEVICE_GROUP_NAME` | `simplemdm_devicegroup` resource. | Name reused across the resource's update steps. |
+| `SIMPLEMDM_DEVICE_GROUP_ATTRIBUTE_KEY` | `simplemdm_devicegroup` resource. | Attribute key written during the update test. |
+| `SIMPLEMDM_DEVICE_GROUP_ATTRIBUTE_VALUE` | `simplemdm_devicegroup` resource. | Initial value for the attribute key above. |
+| `SIMPLEMDM_DEVICE_GROUP_ATTRIBUTE_UPDATED_VALUE` | `simplemdm_devicegroup` resource. | Updated value to verify the update path. |
+| `SIMPLEMDM_DEVICE_GROUP_PROFILE_ID` | `simplemdm_device`, `simplemdm_devicegroup` resources. | Profile attached during the resource lifecycle tests. |
+| `SIMPLEMDM_DEVICE_GROUP_PROFILE_UPDATED_ID` | `simplemdm_device`, `simplemdm_devicegroup` resources. | Replacement profile ID to drive the update. |
+| `SIMPLEMDM_DEVICE_GROUP_CUSTOM_PROFILE_ID` | `simplemdm_device`, `simplemdm_devicegroup` resources. | Custom profile attached during lifecycle tests. |
+| `SIMPLEMDM_DEVICE_GROUP_CUSTOM_PROFILE_UPDATED_ID` | `simplemdm_device`, `simplemdm_devicegroup` resources. | Replacement custom profile ID. |
+
+##### Devices
+
+A single enrolled device unlocks the largest block of acceptance tests:
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_DEVICE_ID` | `simplemdm_device` data source; `simplemdm_device_profiles`, `simplemdm_device_installed_apps`, `simplemdm_device_users`, `simplemdm_device_custom_attribute_values` data sources; `simplemdm_device_command`, `simplemdm_device_custom_attribute_value`, `simplemdm_device_custom_attribute_values`, `simplemdm_custom_attribute_bulk_value` resources. | ID of an enrolled device. The device must be macOS for `simplemdm_device_users` to return data. |
+
+##### DEP / Apple Business Manager
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_DEP_SERVER_ID` | `simplemdm_dep_server` data source. | Optional. Auto-detected from the first DEP server in the tenant when unset. |
+
+##### Enrollments
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_ENROLLMENT_ID` | `simplemdm_enrollment` data source. | ID of an existing enrollment. |
+| `SIMPLEMDM_ENROLLMENT_CONTACT` | `simplemdm_enrollment` resource invitation path. | Email or `+`-prefixed phone for the invitation step. |
+| `SIMPLEMDM_ENROLLMENT_CONTACT_UPDATE` | `simplemdm_enrollment` resource update step. | Replacement contact value to drive the update test. |
+
+##### Installed apps & Munki
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_INSTALLED_APP_ID` | `simplemdm_installed_app` data source; `simplemdm_installed_app_action` resource. | Per-device installed-app record ID, *not* a catalog app ID. |
+| `SIMPLEMDM_MUNKI_APP_ID` | `simplemdm_munki_pkginfo` resource. | ID of a custom (non-App-Store) app that supports Munki pkginfo. |
+
+##### Push certificate
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_PUSH_CERT_PEM` | `simplemdm_push_certificate` resource. | Filesystem path to a real APNs PEM file. |
+| `SIMPLEMDM_PUSH_CERT_APPLE_ID` | `simplemdm_push_certificate` resource. | Optional Apple ID email used when uploading. |
+
+##### Scripts
+
+| Variable | Unlocks | Notes |
+|----------|---------|-------|
+| `SIMPLEMDM_SCRIPT_ID` | `simplemdm_script` data source. | ID of an existing script. |
+| `SIMPLEMDM_SCRIPT_JOB_ID` | `simplemdm_scriptjob` data source. | ID of an existing script job (jobs disappear after one month). |
+
+Use [`scripts/discover-test-fixtures.sh`](./scripts/discover-test-fixtures.sh)
+to collect most of the IDs above automatically from your tenant and emit `gh
+secret set` commands that match the CI workflow.
 
 ## Known issues
 
