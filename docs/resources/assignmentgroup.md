@@ -109,7 +109,9 @@ resource "simplemdm_assignmentgroup" "with_device_groups" {
 ### Optional
 
 - `app_track_location` (Boolean) Optional. Controls whether the SimpleMDM app tracks device location when installed.
-- `apps` (Set of String) Optional. List of Apps assigned to this assignment group
+- `apps` (Set of String) Optional. Set of app IDs assigned to this assignment group. Each app is sent through POST /assignment_groups/{id}/apps/{app_id} with `deployment_type` / `install_type` taken from the matching entry in `apps_deployment_types` / `apps_install_types`, or SimpleMDM defaults if no entry exists.
+- `apps_deployment_types` (Map of String) Optional. Per-app `deployment_type` overrides keyed by app ID. Valid values: `standard`, `munki`. If unset for an app, SimpleMDM picks based on the assignment group's `group_type`.
+- `apps_install_types` (Map of String) Optional. Per-app `install_type` overrides keyed by app ID. Only the apps you list here use a non-default install_type; apps in the `apps` set without an entry here use SimpleMDM's default (`managed`). Valid values: `managed`, `self_serve`, `default_installs`, `managed_updates`. Has no effect for non-Munki (`standard`) groups.
 - `apps_push` (Boolean) Optional. Triggers 'Push Apps' command during apply. This sends an MDM install command to all associated devices for all assigned apps, regardless of current version. Set to true when you want to reinstall or push apps. This is a one-time action on each apply where it's true. Difference from apps_update: push installs all apps.
 - `apps_update` (Boolean) Optional. Triggers 'Update Apps' command during apply. This sends an MDM install command to all associated devices for apps with available updates. Set to true when you want to push app updates. This is a one-time action on each apply where it's true. Difference from apps_push: update only installs if newer version available.
 - `auto_deploy` (Boolean) Optional. Whether the Apps should be automatically pushed to device(s) when they join this Assignment Group. Defaults to true
