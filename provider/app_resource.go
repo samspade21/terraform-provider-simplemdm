@@ -351,6 +351,7 @@ func newAppResourceModelFromAPI(ctx context.Context, app *appAPIResponse) (appRe
 		"app store":  true,
 		"enterprise": true,
 		"custom b2b": true,
+		"custom":     true,
 	}
 	if app.Data.Attributes.AppType != "" && !knownAppTypes[app.Data.Attributes.AppType] {
 		diags.AddWarning(
