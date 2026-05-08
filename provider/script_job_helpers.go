@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
-	simplemdm "github.com/DavidKrau/simplemdm-go-client"
+	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"

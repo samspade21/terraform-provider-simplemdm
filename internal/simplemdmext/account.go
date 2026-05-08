@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	simplemdm "github.com/DavidKrau/simplemdm-go-client"
+	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 )
 
 // AccountResponse models the payload returned from the SimpleMDM account endpoint.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -362,10 +362,10 @@ func (r *managedConfigResource) ImportState(ctx context.Context, req resource.Im
 
 	// Set full state
 	compositeID := fmt.Sprintf("%s:%s", appID, configID)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), compositeID)...)      //nolint:errcheck
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), appID)...)        //nolint:errcheck
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("key"), config.Attributes.Key)...)           //nolint:errcheck
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("value"), config.Attributes.Value)...)       //nolint:errcheck
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), compositeID)...)                         //nolint:errcheck
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), appID)...)                           //nolint:errcheck
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("key"), config.Attributes.Key)...)              //nolint:errcheck
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("value"), config.Attributes.Value)...)          //nolint:errcheck
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("value_type"), config.Attributes.ValueType)...) //nolint:errcheck
 }
 

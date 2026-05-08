@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 )
 
 type enrollmentResponse struct {
@@ -31,9 +31,9 @@ type enrollmentAttributes struct {
 }
 
 type enrollmentRelationships struct {
-	DeviceGroup      *enrollmentRelationshipItem `json:"device_group,omitempty"`
-	AssignmentGroup  *enrollmentRelationshipItem `json:"assignment_group,omitempty"`
-	Device           *enrollmentRelationshipItem `json:"device,omitempty"`
+	DeviceGroup     *enrollmentRelationshipItem `json:"device_group,omitempty"`
+	AssignmentGroup *enrollmentRelationshipItem `json:"assignment_group,omitempty"`
+	Device          *enrollmentRelationshipItem `json:"device,omitempty"`
 }
 
 type enrollmentRelationshipItem struct {
@@ -96,12 +96,12 @@ func createEnrollment(ctx context.Context, client *simplemdm.Client, payload enr
 	}
 
 	q := req.URL.Query()
-	
+
 	// Support both legacy device_group_id and modern assignment_group_id
 	if payload.DeviceGroupID != "" {
 		q.Add("device_group_id", payload.DeviceGroupID)
 	}
-	
+
 	if payload.AssignmentGroupID != "" {
 		q.Add("assignment_group_id", payload.AssignmentGroupID)
 	}
@@ -171,14 +171,14 @@ func sendEnrollmentInvitation(ctx context.Context, client *simplemdm.Client, id 
 func flattenEnrollment(response *enrollmentResponse) enrollmentFlat {
 	var deviceGroupID *int
 	if response.Data.Relationships.DeviceGroup != nil &&
-	   response.Data.Relationships.DeviceGroup.Data != nil {
+		response.Data.Relationships.DeviceGroup.Data != nil {
 		value := response.Data.Relationships.DeviceGroup.Data.ID
 		deviceGroupID = &value
 	}
 
 	var assignmentGroupID *int
 	if response.Data.Relationships.AssignmentGroup != nil &&
-	   response.Data.Relationships.AssignmentGroup.Data != nil {
+		response.Data.Relationships.AssignmentGroup.Data != nil {
 		value := response.Data.Relationships.AssignmentGroup.Data.ID
 		assignmentGroupID = &value
 	}

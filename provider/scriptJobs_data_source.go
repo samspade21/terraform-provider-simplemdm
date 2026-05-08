@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -23,9 +23,9 @@ type scriptJobsDataSource struct {
 }
 
 type scriptJobsDataSourceModel struct {
-	Limit          types.Int64                    `tfsdk:"limit"`
-	StartingAfter  types.Int64                    `tfsdk:"starting_after"`
-	ScriptJobs     []scriptJobsDataSourceJobModel `tfsdk:"script_jobs"`
+	Limit         types.Int64                    `tfsdk:"limit"`
+	StartingAfter types.Int64                    `tfsdk:"starting_after"`
+	ScriptJobs    []scriptJobsDataSourceJobModel `tfsdk:"script_jobs"`
 }
 
 type scriptJobsDataSourceJobModel struct {
@@ -191,7 +191,7 @@ func (d *scriptJobsDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	// Fetch script jobs (with automatic pagination if limit not specified)
 	var scriptJobs []scriptJobResponse
 	var err error
-	
+
 	if !config.Limit.IsNull() && !config.Limit.IsUnknown() {
 		// User specified a limit, fetch only one page
 		scriptJobs, err = listScriptJobsWithLimit(ctx, d.client, startingAfter, int(config.Limit.ValueInt64()))
@@ -199,7 +199,7 @@ func (d *scriptJobsDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		// No limit specified, fetch all pages automatically
 		scriptJobs, err = fetchAllScriptJobs(ctx, d.client)
 	}
-	
+
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to list SimpleMDM script jobs",
@@ -221,19 +221,19 @@ func (d *scriptJobsDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		}
 
 		entry := scriptJobsDataSourceJobModel{
-			ID:                   types.StringValue(details.ID),
-			ScriptName:           stringValueOrNull(details.ScriptName),
-			JobName:              stringValueOrNull(details.JobName),
-			JobIdentifier:        stringValueOrNull(details.JobIdentifier),
-			Content:              stringValueOrNull(details.Content),
-			VariableSupport:      types.BoolValue(details.VariableSupport),
-			Status:               stringValueOrNull(details.Status),
-			PendingCount:         types.Int64Value(details.PendingCount),
-			SuccessCount:         types.Int64Value(details.SuccessCount),
-			ErroredCount:         types.Int64Value(details.ErroredCount),
-			CreatedBy:            stringValueOrNull(details.CreatedBy),
-			CreatedAt:            stringValueOrNull(details.CreatedAt),
-			UpdatedAt:            stringValueOrNull(details.UpdatedAt),
+			ID:              types.StringValue(details.ID),
+			ScriptName:      stringValueOrNull(details.ScriptName),
+			JobName:         stringValueOrNull(details.JobName),
+			JobIdentifier:   stringValueOrNull(details.JobIdentifier),
+			Content:         stringValueOrNull(details.Content),
+			VariableSupport: types.BoolValue(details.VariableSupport),
+			Status:          stringValueOrNull(details.Status),
+			PendingCount:    types.Int64Value(details.PendingCount),
+			SuccessCount:    types.Int64Value(details.SuccessCount),
+			ErroredCount:    types.Int64Value(details.ErroredCount),
+			CreatedBy:       stringValueOrNull(details.CreatedBy),
+			CreatedAt:       stringValueOrNull(details.CreatedAt),
+			UpdatedAt:       stringValueOrNull(details.UpdatedAt),
 		}
 
 		if details.CustomAttribute != "" {
@@ -307,7 +307,7 @@ func listScriptJobsWithLimit(ctx context.Context, client *simplemdm.Client, star
 	if limit < 1 || limit > 100 {
 		limit = 100
 	}
-	
+
 	url := fmt.Sprintf("https://%s/api/v1/script_jobs?limit=%d", client.HostName, limit)
 	if startingAfter > 0 {
 		url += fmt.Sprintf("&starting_after=%d", startingAfter)

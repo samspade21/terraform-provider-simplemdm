@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	simplemdm "github.com/DavidKrau/simplemdm-go-client"
+	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 )
 
 // LogListResponse models the paginated log collection response.

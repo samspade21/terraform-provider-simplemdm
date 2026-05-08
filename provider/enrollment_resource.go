@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -194,7 +194,7 @@ func (r *enrollmentResource) Create(ctx context.Context, req resource.CreateRequ
 			)
 			return
 		}
-		
+
 		if err := sendEnrollmentInvitation(ctx, r.client, state.ID.ValueString(), plan.InvitationContact.ValueString()); err != nil {
 			resp.Diagnostics.AddError(
 				"Error sending enrollment invitation",
@@ -270,7 +270,7 @@ func (r *enrollmentResource) Update(ctx context.Context, req resource.UpdateRequ
 			)
 			return
 		}
-		
+
 		if err := sendEnrollmentInvitation(ctx, r.client, state.ID.ValueString(), plan.InvitationContact.ValueString()); err != nil {
 			resp.Diagnostics.AddError(
 				"Error sending enrollment invitation",

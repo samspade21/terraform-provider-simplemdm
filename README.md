@@ -3,9 +3,11 @@
 This repository contains the Terraform provider that manages resources in
 [SimpleMDM](https://simplemdm.com). The provider is implemented with the
 [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework)
-and uses the official
-[`simplemdm-go-client`](https://github.com/DavidKrau/simplemdm-go-client) to talk to
-SimpleMDM's REST API.
+and includes its own SimpleMDM API client under
+[`internal/simplemdm/`](./internal/simplemdm/). The client was originally a
+separate Go module (`github.com/DavidKrau/simplemdm-go-client`) that the
+provider depended on externally; it has been vendored in so we can fix bugs
+in place and add coverage for endpoints the upstream module didn't expose.
 
 > **Compatibility:** This provider targets the **SimpleMDM API v1.55**
 > ([api.simplemdm.com/v1](https://api.simplemdm.com/v1)). Endpoints and
@@ -168,7 +170,3 @@ A few tests need a specific fixture that auto-discovery can't reliably pick:
 
 * Device name updates require a manual PATCH request outside of Terraform.
 * Profiles and custom profiles applied to assignment groups or devices cannot be updated via API; Terraform compares the desired configuration against the previous state only.
-* The upstream `simplemdm-go-client` reads HTTP response bodies before
-  checking the status code, so on 4xx/5xx responses surfaced through it the
-  body shows as empty. Newer code paths in `internal/simplemdmext` use a
-  local `DoRequest` helper that surfaces the JSON error envelope.

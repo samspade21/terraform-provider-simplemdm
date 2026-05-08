@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -127,13 +127,13 @@ func (d *profileDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	// Map response body to model with consistent null handling
 	state.ID = types.StringValue(strconv.Itoa(profile.Data.ID))
-	
+
 	if profile.Data.Type != "" {
 		state.Type = types.StringValue(profile.Data.Type)
 	} else {
 		state.Type = types.StringNull()
 	}
-	
+
 	state.Name = types.StringValue(profile.Data.Attributes.Name)
 	state.ReinstallAfterOSUpdate = types.BoolValue(profile.Data.Attributes.ReinstallAfterOSUpdate)
 	state.ProfileIdentifier = types.StringValue(profile.Data.Attributes.ProfileIdentifier)

@@ -8,7 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 
-	simplemdm "github.com/DavidKrau/simplemdm-go-client"
+	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 )
 
 // AppInstallItem represents a single per-device install record returned from

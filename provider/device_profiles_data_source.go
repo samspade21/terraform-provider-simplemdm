@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -24,17 +24,17 @@ type deviceProfilesDataSource struct {
 }
 
 type deviceProfilesDataSourceModel struct {
-	DeviceID types.String                      `tfsdk:"device_id"`
-	Profiles []deviceProfileDataSourceModel    `tfsdk:"profiles"`
+	DeviceID types.String                   `tfsdk:"device_id"`
+	Profiles []deviceProfileDataSourceModel `tfsdk:"profiles"`
 }
 
 type deviceProfileDataSourceModel struct {
-	ID               types.String `tfsdk:"id"`
-	Type             types.String `tfsdk:"type"`
-	Name             types.String `tfsdk:"name"`
+	ID                types.String `tfsdk:"id"`
+	Type              types.String `tfsdk:"type"`
+	Name              types.String `tfsdk:"name"`
 	ProfileIdentifier types.String `tfsdk:"profile_identifier"`
-	UserScope        types.Bool   `tfsdk:"user_scope"`
-	AttributeSupport types.Bool   `tfsdk:"attribute_support"`
+	UserScope         types.Bool   `tfsdk:"user_scope"`
+	AttributeSupport  types.Bool   `tfsdk:"attribute_support"`
 }
 
 func DeviceProfilesDataSource() datasource.DataSource {

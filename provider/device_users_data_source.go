@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -24,8 +24,8 @@ type deviceUsersDataSource struct {
 }
 
 type deviceUsersDataSourceModel struct {
-	DeviceID types.String                   `tfsdk:"device_id"`
-	Users    []deviceUserDataSourceModel    `tfsdk:"users"`
+	DeviceID types.String                `tfsdk:"device_id"`
+	Users    []deviceUserDataSourceModel `tfsdk:"users"`
 }
 
 type deviceUserDataSourceModel struct {

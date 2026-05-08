@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
-	simplemdm "github.com/DavidKrau/simplemdm-go-client"
+	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 )
 
 // DeviceResponse models the payload returned from the SimpleMDM device endpoints.

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
-	simplemdm "github.com/DavidKrau/simplemdm-go-client"
+	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 )
 
 // BulkAttributeAssignment is a single device/value pair used in

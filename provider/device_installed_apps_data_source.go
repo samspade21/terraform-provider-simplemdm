@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -24,22 +24,22 @@ type deviceInstalledAppsDataSource struct {
 }
 
 type deviceInstalledAppsDataSourceModel struct {
-	DeviceID      types.String                          `tfsdk:"device_id"`
-	InstalledApps []deviceInstalledAppDataSourceModel   `tfsdk:"installed_apps"`
+	DeviceID      types.String                        `tfsdk:"device_id"`
+	InstalledApps []deviceInstalledAppDataSourceModel `tfsdk:"installed_apps"`
 }
 
 type deviceInstalledAppDataSourceModel struct {
-	ID            types.String `tfsdk:"id"`
-	Type          types.String `tfsdk:"type"`
-	Name          types.String `tfsdk:"name"`
-	Identifier    types.String `tfsdk:"identifier"`
-	Version       types.String `tfsdk:"version"`
-	ShortVersion  types.String `tfsdk:"short_version"`
-	BundleSize    types.Int64  `tfsdk:"bundle_size"`
-	DynamicSize   types.Int64  `tfsdk:"dynamic_size"`
-	Managed       types.Bool   `tfsdk:"managed"`
-	DiscoveredAt  types.String `tfsdk:"discovered_at"`
-	LastSeenAt    types.String `tfsdk:"last_seen_at"`
+	ID           types.String `tfsdk:"id"`
+	Type         types.String `tfsdk:"type"`
+	Name         types.String `tfsdk:"name"`
+	Identifier   types.String `tfsdk:"identifier"`
+	Version      types.String `tfsdk:"version"`
+	ShortVersion types.String `tfsdk:"short_version"`
+	BundleSize   types.Int64  `tfsdk:"bundle_size"`
+	DynamicSize  types.Int64  `tfsdk:"dynamic_size"`
+	Managed      types.Bool   `tfsdk:"managed"`
+	DiscoveredAt types.String `tfsdk:"discovered_at"`
+	LastSeenAt   types.String `tfsdk:"last_seen_at"`
 }
 
 func DeviceInstalledAppsDataSource() datasource.DataSource {
