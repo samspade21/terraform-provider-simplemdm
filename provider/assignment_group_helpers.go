@@ -469,9 +469,10 @@ func waitForAssignmentGroupAddressable(ctx context.Context, client *simplemdm.Cl
 // so per-app install_type / deployment_type overrides apply; removed apps
 // go through AssignmentGroupUnAssignApp.
 //
-// Apps that stay in the set but whose install_type or deployment_type
-// changed are re-assigned (the API treats this as idempotent — it just
-// updates the existing relationship).
+// Apps that stay in the set but whose install_type or deployment_type changed
+// are unassigned then reassigned. SimpleMDM ignores deployment_type /
+// install_type on a POST to an already-assigned app, so a plain re-POST is a
+// no-op for override changes; the unassign-then-reassign cycle is required.
 func updateAssignmentGroupApps(
 	ctx context.Context,
 	client *simplemdm.Client,
@@ -500,7 +501,8 @@ func updateAssignmentGroupApps(
 		}
 	}
 
-	// Re-assign apps whose overrides changed in the new plan.
+	// Re-assign apps whose overrides changed: unassign first so SimpleMDM
+	// picks up the new deployment_type / install_type on the fresh assign.
 	for _, appID := range planSlice {
 		if !slices.Contains(stateSlice, appID) {
 			continue // already added above
@@ -508,6 +510,9 @@ func updateAssignmentGroupApps(
 		if planInstall[appID] != stateInstall[appID] || planDeploy[appID] != stateDeploy[appID] {
 			if err := ctx.Err(); err != nil {
 				return fmt.Errorf("operation cancelled: %w", err)
+			}
+			if err := client.AssignmentGroupUnAssignApp(groupID, appID); err != nil && !isNotFoundError(err) {
+				return err
 			}
 			if err := client.AssignmentGroupAssignApp(groupID, appID, planDeploy[appID], planInstall[appID]); err != nil {
 				return err
