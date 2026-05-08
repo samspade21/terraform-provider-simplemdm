@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -124,7 +123,7 @@ func (d *customDeclarationDataSource) Read(ctx context.Context, req datasource.R
 
 	responseBody, err := d.client.RequestResponse200(httpReq)
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.Diagnostics.AddError("Custom declaration not found", err.Error())
 			return
 		}

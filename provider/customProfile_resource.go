@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"strconv"
-	"strings"
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
@@ -205,7 +204,7 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 	// This endpoint is not documented in the API specification but is functional.
 	profile, err := simplemdmext.GetCustomProfile(ctx, r.client, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -224,7 +223,7 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 	// and computes the SHA-256 checksum locally. The 'profile_sha' field is not returned by the API.
 	sha, body, err := r.client.CustomProfileSHA(state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -266,7 +265,7 @@ func (r *customProfileResource) Update(ctx context.Context, req resource.UpdateR
 		Declarative:            plan.Declarative.ValueBool(),
 	})
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -282,7 +281,7 @@ func (r *customProfileResource) Update(ctx context.Context, req resource.UpdateR
 
 	sha, body, err := r.client.CustomProfileSHA(plan.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

@@ -126,7 +126,7 @@ func (r *customDeclarationDeviceAssignmentResource) Read(ctx context.Context, re
 
 	body, err := r.client.RequestResponse200(httpReq)
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -168,7 +168,7 @@ func (r *customDeclarationDeviceAssignmentResource) Delete(ctx context.Context, 
 	}
 
 	if _, err := r.client.RequestResponse204or409(httpReq); err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			return
 		}
 

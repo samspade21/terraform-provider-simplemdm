@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 
@@ -514,7 +515,7 @@ func updateAssignmentGroupApps(
 
 	// Re-assign apps whose overrides changed in the new plan.
 	for _, appID := range planSlice {
-		if !contains(stateSlice, appID) {
+		if !slices.Contains(stateSlice, appID) {
 			continue // already added above
 		}
 		if planInstall[appID] != stateInstall[appID] || planDeploy[appID] != stateDeploy[appID] {
@@ -536,15 +537,6 @@ func updateAssignmentGroupApps(
 		}
 	}
 	return nil
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
 }
 
 // updateAssignmentGroupObjects updates assignments by computing diff and applying changes
@@ -613,7 +605,6 @@ func updateAssignmentGroupObjects(
 
 // diffFunction computes the difference between state and plan lists
 // Returns items to add and items to remove
-// Optimized to O(n) complexity using map lookups instead of nested loops
 func diffFunction(state []string, plan []string) (add []string, remove []string) {
 	// Create map of state items for O(1) lookups
 	stateMap := make(map[string]bool, len(state))

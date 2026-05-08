@@ -451,7 +451,7 @@ func (r *assignment_groupResource) Read(ctx context.Context, req resource.ReadRe
 	// Get refreshed assignment group values from SimpleMDM
 	assignmentGroup, err := fetchAssignmentGroup(ctx, r.client, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

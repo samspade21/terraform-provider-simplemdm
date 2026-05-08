@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
@@ -116,7 +115,7 @@ func (d *customProfileDataSource) Read(ctx context.Context, req datasource.ReadR
 	// This endpoint is not documented in the API specification but is functional.
 	profile, err := simplemdmext.GetCustomProfile(ctx, d.client, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.Diagnostics.AddError(
 				"Error reading SimpleMDM custom profile",
 				"Custom profile with ID "+state.ID.ValueString()+" was not found.",
@@ -145,7 +144,7 @@ func (d *customProfileDataSource) Read(ctx context.Context, req datasource.ReadR
 	// and computes the SHA-256 checksum locally. The 'profile_sha' field is not returned by the API.
 	sha, body, err := d.client.CustomProfileSHA(state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.Diagnostics.AddError(
 				"Error reading SimpleMDM custom profile",
 				"Custom profile payload for ID "+state.ID.ValueString()+" was not found.",

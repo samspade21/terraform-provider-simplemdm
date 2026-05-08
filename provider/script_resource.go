@@ -4,7 +4,6 @@ import (
 	"context"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -160,7 +159,7 @@ func (r *scriptResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// Get script values from SimpleMDM
 	script, err := r.client.ScriptGet(state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

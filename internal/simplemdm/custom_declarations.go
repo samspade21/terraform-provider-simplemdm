@@ -3,7 +3,6 @@ package simplemdm
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -18,17 +17,8 @@ func (c *Client) CustomDeclarationDelete(ID string) error {
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 func (c *Client) CustomDeclarationUpdate(name string, declarationType string, declaration string, userScope bool, attributeSupport bool, escapeAttributes bool, ID string, activationPredicate string) (*SimplemdmDefaultStruct, error) {
@@ -59,7 +49,6 @@ func (c *Client) CustomDeclarationUpdate(name string, declarationType string, de
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
 	q.Add("declaration_type", declarationType)
 	q.Add("activation_predicate", activationPredicate)
@@ -89,7 +78,6 @@ func (c *Client) CustomDeclarationUpdate(name string, declarationType string, de
 	//Auto renew SCEP issued certificates
 	//Enable Declarative Management
 
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -134,7 +122,6 @@ func (c *Client) CustomDeclarationCreate(name string, declarationType string, de
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
 	q.Add("declaration_type", declarationType)
 	q.Add("activation_predicate", activationPredicate)
@@ -164,7 +151,6 @@ func (c *Client) CustomDeclarationCreate(name string, declarationType string, de
 	//Auto renew SCEP issued certificates
 	//Enable Declarative Management
 
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -210,16 +196,8 @@ func (c *Client) CustomDeclarationAssignToDevice(ID string, deviceID string) err
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }
 
 func (c *Client) CustomDeclrationUnassignFromDevice(ID string, deviceID string) error {
@@ -229,14 +207,6 @@ func (c *Client) CustomDeclrationUnassignFromDevice(ID string, deviceID string) 
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }

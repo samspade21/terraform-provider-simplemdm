@@ -2,7 +2,6 @@ package simplemdm
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -38,16 +37,8 @@ func (c *Client) ProfileAssignToGroup(profileID string, deviceGroupID string) er
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }
 
 // Unasiign profile from group
@@ -58,16 +49,8 @@ func (c *Client) ProfileUnAssignToGroup(profileID string, deviceGroupID string) 
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }
 
 // Assign profile to the device
@@ -78,16 +61,8 @@ func (c *Client) ProfileAssignToDevice(profileID string, deviceID string) error 
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }
 
 // Unasiign profile from device
@@ -98,16 +73,8 @@ func (c *Client) ProfileUnAssignToDevice(profileID string, deviceID string) erro
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }
 
 // GetAllProfiles - Returns all Profiles

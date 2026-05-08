@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 )
 
 // CreateAssignmentGroup - Create new addignment group
@@ -16,26 +17,14 @@ func (c *Client) AssignmentGroupCreate(name string, autoDeploy bool, priority st
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
 
-	switch {
-	case autoDeploy:
-		q.Add("auto_deploy", "true")
-	default:
-		q.Add("auto_deploy", "false")
-	}
+	q.Add("auto_deploy", strconv.FormatBool(autoDeploy))
 
-	switch {
-	case appTrackLocation:
-		q.Add("app_track_location", "true")
-	default:
-		q.Add("app_track_location", "false")
-	}
+	q.Add("app_track_location", strconv.FormatBool(appTrackLocation))
 
 	q.Add("priority", priority)
 
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 
 	body, err := c.RequestResponse201(req)
@@ -60,17 +49,8 @@ func (c *Client) AssignmentGroupDelete(ID string) error {
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 // UpdateAssignmentGroup - Updates an assignment group
@@ -82,38 +62,18 @@ func (c *Client) AssignmentGroupUpdate(name string, autoDeploy bool, ID string, 
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
 
-	switch {
-	case autoDeploy:
-		q.Add("auto_deploy", "true")
-	default:
-		q.Add("auto_deploy", "false")
-	}
+	q.Add("auto_deploy", strconv.FormatBool(autoDeploy))
 
-	switch {
-	case appTrackLocation:
-		q.Add("app_track_location", "true")
-	default:
-		q.Add("app_track_location", "false")
-	}
+	q.Add("app_track_location", strconv.FormatBool(appTrackLocation))
 
 	q.Add("priority", priority)
 
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 
-	body, err := c.RequestResponse204(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 // GetAssignmentGroup - Returns a specifc assignment group
@@ -148,17 +108,8 @@ func (c *Client) AssignmentGroupAssignObject(groupID string, objectID string, ob
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 // object type is app, device, group, profile
@@ -171,17 +122,8 @@ func (c *Client) AssignmentGroupUnAssignObject(groupID string, objectID string, 
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 func (c *Client) AssignmentGroupPushApps(groupID string) error {
@@ -190,17 +132,8 @@ func (c *Client) AssignmentGroupPushApps(groupID string) error {
 	if err != nil {
 		return err
 	}
-	body, err := c.RequestResponse202or429(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse202or429(req)
+	return err
 }
 
 func (c *Client) AssignmentGroupUpdateInstalledApps(groupID string) error {
@@ -209,17 +142,8 @@ func (c *Client) AssignmentGroupUpdateInstalledApps(groupID string) error {
 	if err != nil {
 		return err
 	}
-	body, err := c.RequestResponse202or429(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse202or429(req)
+	return err
 }
 
 func (c *Client) AssignmentGroupSyncProfiles(groupID string) error {
@@ -228,17 +152,8 @@ func (c *Client) AssignmentGroupSyncProfiles(groupID string) error {
 	if err != nil {
 		return err
 	}
-	body, err := c.RequestResponse204or409(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }
 
 // AttributeGetAttributesForGroup - Returns a specifc attribute
@@ -301,15 +216,6 @@ func (c *Client) AssignmentGroupUnAssignApp(groupID string, appID string) error 
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }

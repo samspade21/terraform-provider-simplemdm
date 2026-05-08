@@ -2,7 +2,6 @@ package simplemdm
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 )
@@ -38,14 +37,10 @@ func (c *Client) AttributeCreate(name string, defaultValue string) (*Attribute, 
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
-	// checking if defaultvalue exist
 	if defaultValue != "" {
-		// if yes adding parameter with value
 		q.Add("default_value", defaultValue)
 	}
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 
 	body, err := c.RequestResponse201(req)
@@ -71,26 +66,15 @@ func (c *Client) AttributeUpdate(name string, defaultValue string) error {
 	}
 
 	q := req.URL.Query()
-	// checking if defaultvalue exist
 	if defaultValue != "" {
-		// if yes adding parameter with value
 		q.Add("default_value", defaultValue)
 	} else {
 		q.Add("default_value", "")
 	}
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 
-	body, err := c.RequestResponse204(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 // DeleteAttribute - Deletes an attribute
@@ -101,17 +85,8 @@ func (c *Client) AttributeDelete(name string) error {
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 // SetAttributeForDeviceGroupAttribute - Updates an attribute for group
@@ -124,7 +99,6 @@ func (c *Client) AttributeSetAttributeForDeviceGroup(groupID string, attribute s
 
 	q := req.URL.Query()
 	q.Add("value", defaultValue)
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 
 	body, err := c.RequestResponse200(req)
@@ -173,7 +147,6 @@ func (c *Client) AttributeSetAttributeForDevice(deviceID string, attribute strin
 
 	q := req.URL.Query()
 	q.Add("value", value)
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 
 	body, err := c.RequestResponse200(req)

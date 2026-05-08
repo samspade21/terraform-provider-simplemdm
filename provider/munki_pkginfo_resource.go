@@ -87,21 +87,23 @@ func (r *munkiPkgInfoResource) Configure(_ context.Context, req resource.Configu
 	r.client = configureResourceClient(req, resp)
 }
 
-func (r *munkiPkgInfoResource) apply(ctx context.Context, plan *munkiPkgInfoResourceModel, diags *resource.CreateResponse) bool {
+// apply uploads the pkginfo and populates computed fields on the model. It
+// returns an error rather than mutating diagnostics so Create and Update can
+// share it without the synthetic-CreateResponse dance.
+func (r *munkiPkgInfoResource) apply(ctx context.Context, plan *munkiPkgInfoResourceModel) error {
 	filename := plan.Filename.ValueString()
 	if filename == "" {
 		filename = "munki_pkginfo.plist"
 	}
 	content := []byte(plan.PkgInfo.ValueString())
 	if err := simplemdmext.UploadMunkiPkgInfo(ctx, r.client, plan.AppID.ValueString(), content, filename); err != nil {
-		diags.Diagnostics.AddError("Failed to upload Munki pkginfo", err.Error())
-		return false
+		return err
 	}
 	sum := sha256.Sum256(content)
 	plan.ID = types.StringValue("munki_pkginfo:" + plan.AppID.ValueString())
 	plan.Filename = types.StringValue(filename)
 	plan.PkgInfoSHA = types.StringValue(hex.EncodeToString(sum[:]))
-	return true
+	return nil
 }
 
 func (r *munkiPkgInfoResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -110,20 +112,16 @@ func (r *munkiPkgInfoResource) Create(ctx context.Context, req resource.CreateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !r.apply(ctx, &plan, resp) {
+	if err := r.apply(ctx, &plan); err != nil {
+		resp.Diagnostics.AddError("Failed to upload Munki pkginfo", err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-// Read is a no-op: the API does not expose a GET endpoint for pkginfo content.
-func (r *munkiPkgInfoResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state munkiPkgInfoResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+// Read is a no-op: the API does not expose a GET endpoint for pkginfo content,
+// so leave the existing state untouched.
+func (r *munkiPkgInfoResource) Read(_ context.Context, _ resource.ReadRequest, _ *resource.ReadResponse) {
 }
 
 func (r *munkiPkgInfoResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -132,12 +130,10 @@ func (r *munkiPkgInfoResource) Update(ctx context.Context, req resource.UpdateRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	cr := &resource.CreateResponse{Diagnostics: resp.Diagnostics}
-	if !r.apply(ctx, &plan, cr) {
-		resp.Diagnostics = cr.Diagnostics
+	if err := r.apply(ctx, &plan); err != nil {
+		resp.Diagnostics.AddError("Failed to upload Munki pkginfo", err.Error())
 		return
 	}
-	resp.Diagnostics = cr.Diagnostics
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 

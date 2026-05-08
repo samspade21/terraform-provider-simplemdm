@@ -3,7 +3,6 @@ package simplemdm
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -41,36 +40,15 @@ func (c *Client) CustomProfileCreate(name string, mobileConfig string, userScope
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
 
-	switch {
-	case userScope:
-		q.Add("user_scope", "true")
-	default:
-		q.Add("user_scope", "false")
-	}
+	q.Add("user_scope", strconv.FormatBool(userScope))
 
-	switch {
-	case attributeSupport:
-		q.Add("attribute_support", "true")
-	default:
-		q.Add("attribute_support", "false")
-	}
+	q.Add("attribute_support", strconv.FormatBool(attributeSupport))
 
-	switch {
-	case escapeAttributes:
-		q.Add("escape_attributes", "true")
-	default:
-		q.Add("escape_attributes", "false")
-	}
+	q.Add("escape_attributes", strconv.FormatBool(escapeAttributes))
 
-	switch {
-	case reinstallAfterOsUpdate:
-		q.Add("reinstall_after_os_update", "true")
-	default:
-		q.Add("reinstall_after_os_update", "false")
-	}
+	q.Add("reinstall_after_os_update", strconv.FormatBool(reinstallAfterOsUpdate))
 
 	// defaults:
 	// user_scope false
@@ -82,7 +60,6 @@ func (c *Client) CustomProfileCreate(name string, mobileConfig string, userScope
 	//Auto renew SCEP issued certificates
 	//Enable Declarative Management
 
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -108,17 +85,8 @@ func (c *Client) CustomProfileDelete(profileID string) error {
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 // UpdateProfile - Updates an profile
@@ -150,42 +118,20 @@ func (c *Client) CustomProfileUpdate(name string, mobileConfig string, userScope
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
 
-	switch {
-	case userScope:
-		q.Add("user_scope", "true")
-	default:
-		q.Add("user_scope", "false")
-	}
+	q.Add("user_scope", strconv.FormatBool(userScope))
 
-	switch {
-	case attributeSupport:
-		q.Add("attribute_support", "true")
-	default:
-		q.Add("attribute_support", "false")
-	}
+	q.Add("attribute_support", strconv.FormatBool(attributeSupport))
 
-	switch {
-	case escapeAttributes:
-		q.Add("escape_attributes", "true")
-	default:
-		q.Add("escape_attributes", "false")
-	}
+	q.Add("escape_attributes", strconv.FormatBool(escapeAttributes))
 
-	switch {
-	case reinstallAfterOsUpdate:
-		q.Add("reinstall_after_os_update", "true")
-	default:
-		q.Add("reinstall_after_os_update", "false")
-	}
+	q.Add("reinstall_after_os_update", strconv.FormatBool(reinstallAfterOsUpdate))
 
 	//Not in API
 	//Auto renew SCEP issued certificates
 	//Enable Declarative Management
 
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -300,16 +246,8 @@ func (c *Client) CustomProfileAssignToDeviceGroup(profileID string, groupID stri
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }
 
 // UnassignFromDeviceGroupProfile - Returns a specifc profile
@@ -320,16 +258,8 @@ func (c *Client) CustomProfileUnassignFromDeviceGroup(profileID string, groupID 
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }
 
 func (c *Client) CustomProfileAssignToDevice(profileID string, deviceID string) error {
@@ -339,16 +269,8 @@ func (c *Client) CustomProfileAssignToDevice(profileID string, deviceID string) 
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }
 
 func (c *Client) CustomProfileUnAssignToDevice(profileID string, deviceID string) error {
@@ -358,14 +280,6 @@ func (c *Client) CustomProfileUnAssignToDevice(profileID string, deviceID string
 		return err
 	}
 
-	body, err := c.RequestResponse204or409(req)
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204or409(req)
+	return err
 }

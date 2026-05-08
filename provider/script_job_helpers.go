@@ -15,21 +15,25 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// scriptJobErrorHint inspects the tenant when a script_job create fails and
-// returns a human-friendly addendum that tells the operator *why* the call
-// likely failed. SimpleMDM's 422 on script_jobs is opaque — the only signal
-// is the URL — so we look up devices and produce one of:
+// scriptJobErrorHint augments a script_job create error with a tenant-aware
+// diagnostic when the underlying failure is a 422 / 400 from SimpleMDM —
+// those statuses indicate the targets are wrong (no devices, non-enrolled
+// IDs, non-macOS IDs), which the API surfaces only as a generic message.
+// For other error classes (5xx, timeouts, auth) the hint isn't relevant
+// and we return "" without doing the extra ListDevices call.
 //
-//   - "" (no useful hint to add)
-//   - "the tenant has no enrolled devices" (most common when CI runs
-//     against an empty test tenant)
-//   - "device IDs <ids> are not enrolled" (when the user references devices
-//     that are still in awaiting_enrollment, deleted, etc.)
-//
-// Best-effort: any error fetching the device list silently returns "".
-// Script jobs only run on macOS, so we additionally call out non-macOS
-// targets.
-func scriptJobErrorHint(ctx context.Context, client *simplemdm.Client, deviceIDs []string) string {
+// The check is best-effort: any error fetching the device list silently
+// returns "". Script jobs run on macOS only, so non-macOS targets are
+// called out specifically.
+func scriptJobErrorHint(ctx context.Context, client *simplemdm.Client, originalErr error, deviceIDs []string) string {
+	if originalErr == nil {
+		return ""
+	}
+	errStr := originalErr.Error()
+	if !strings.Contains(errStr, "422") && !strings.Contains(errStr, "400") {
+		return ""
+	}
+
 	devices, err := simplemdmext.ListDevices(ctx, client, "", true, false)
 	if err != nil {
 		return ""
@@ -50,19 +54,20 @@ func scriptJobErrorHint(ctx context.Context, client *simplemdm.Client, deviceIDs
 		return "Hint: the tenant has devices but none are in `enrolled` state (script jobs can only target enrolled devices). Wait for enrollment to complete or enroll a new device."
 	}
 
-	// If the user passed device_ids explicitly, see which of them are valid macOS targets.
 	if len(deviceIDs) == 0 {
 		return ""
 	}
-	bad := []string{}
-	nonMac := []string{}
+	var bad, nonMac []string
 	for _, id := range deviceIDs {
 		attrs, ok := enrolled[id]
 		if !ok {
 			bad = append(bad, id)
 			continue
 		}
-		if pname, _ := attrs["product_name"].(string); !strings.HasPrefix(pname, "Mac") && !strings.Contains(pname, "iMac") && !strings.Contains(pname, "MacBook") && !strings.HasPrefix(pname, "Macmini") {
+		// SimpleMDM's `product_name` for macOS devices contains "Mac" (e.g.
+		// "MacBookPro14,3", "iMac20,2", "Macmini8,1"). A single Contains
+		// check covers MacBook / iMac / Macmini / MacPro / MacStudio.
+		if pname, _ := attrs["product_name"].(string); !strings.Contains(pname, "Mac") {
 			nonMac = append(nonMac, id)
 		}
 	}

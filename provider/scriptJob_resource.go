@@ -262,9 +262,6 @@ func (r *scriptJobResource) Create(ctx context.Context, req resource.CreateReque
 		customAttributeRegex = plan.CustomAttributeRegex.ValueString()
 	}
 
-	// Note: Validation for at least one target being provided is already handled by schema validators
-	// at lines 101-106, 115-121, and 130-136, so no additional validation is needed here.
-
 	// Combine legacy group_ids with assignment_group_ids for the API call
 	// The v0.2+ client only has a single assignmentGroupIds parameter
 	allGroupIDs := append(groupIDs, assignmentGroupIDs...)
@@ -278,11 +275,11 @@ func (r *scriptJobResource) Create(ctx context.Context, req resource.CreateReque
 	)
 	if err != nil {
 		// SimpleMDM rejects script_job create with a generic 422 when the
-		// targets don't include any actually-enrolled macOS devices. Look up
-		// the tenant once and add a friendlier hint to the diagnostic so the
-		// user knows whether the problem is "tenant has no devices" or
-		// "the specific IDs you passed aren't enrolled / aren't macOS".
-		hint := scriptJobErrorHint(ctx, r.client, deviceIDs)
+		// targets don't include any actually-enrolled macOS devices.
+		// scriptJobErrorHint inspects the tenant only when the underlying
+		// status is 4xx-target-related, so unrelated failures (5xx, auth,
+		// timeouts) skip the extra round-trip.
+		hint := scriptJobErrorHint(ctx, r.client, err, deviceIDs)
 		message := "Could not create script job, unexpected error: " + err.Error()
 		if hint != "" {
 			message += "\n\n" + hint

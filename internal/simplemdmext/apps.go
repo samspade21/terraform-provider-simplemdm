@@ -3,7 +3,6 @@ package simplemdmext
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -25,11 +24,6 @@ type AppInstallItem struct {
 			} `json:"data"`
 		} `json:"device"`
 	} `json:"relationships"`
-}
-
-type appInstallsResponse struct {
-	Data    []AppInstallItem `json:"data"`
-	HasMore bool             `json:"has_more"`
 }
 
 // UploadMunkiPkgInfo replaces the Munki pkginfo XML/PLIST blob attached to an
@@ -104,17 +98,16 @@ func ListAppInstalls(ctx context.Context, client *simplemdm.Client, appID string
 			return nil, err
 		}
 
-		var resp appInstallsResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[AppInstallItem](body)
+		if err != nil {
 			return nil, err
 		}
 
-		out = append(out, resp.Data...)
-
-		if !resp.HasMore || len(resp.Data) == 0 {
+		out = append(out, page...)
+		if !hasMore || len(page) == 0 {
 			break
 		}
-		startingAfter = resp.Data[len(resp.Data)-1].ID.String()
+		startingAfter = page[len(page)-1].ID.String()
 	}
 
 	return out, nil

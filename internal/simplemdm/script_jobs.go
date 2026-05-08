@@ -3,7 +3,6 @@ package simplemdm
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -61,17 +60,8 @@ func (c *Client) ScriptCancelJob(scriptID string) error {
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 // ScriptJobGet - Returns a specifc script job

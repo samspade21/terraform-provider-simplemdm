@@ -3,7 +3,6 @@ package simplemdm
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -39,7 +38,6 @@ func (c *Client) ScriptCreate(name string, variableSupport bool, scriptFile stri
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
 
 	switch {
@@ -49,7 +47,6 @@ func (c *Client) ScriptCreate(name string, variableSupport bool, scriptFile stri
 		q.Add("variable_support", "0")
 	}
 
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -75,17 +72,8 @@ func (c *Client) ScriptDelete(scriptID string) error {
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 // ScriptUpdate - Updates an script
@@ -117,7 +105,6 @@ func (c *Client) ScriptUpdate(name string, variableSupport bool, scriptFile stri
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
 
 	switch {
@@ -126,7 +113,6 @@ func (c *Client) ScriptUpdate(name string, variableSupport bool, scriptFile stri
 	default:
 		q.Add("variable_support", "0")
 	}
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 

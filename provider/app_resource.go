@@ -405,12 +405,15 @@ func fetchApp(ctx context.Context, client *simplemdm.Client, appID string) (*app
 	return &app, nil
 }
 
-// isNotFoundError checks if an error is a 404 not found error
+// isNotFoundError reports whether err looks like a 404 from the SimpleMDM
+// API. Used by data sources / resources to remove gone records from state
+// instead of erroring on the next plan.
 func isNotFoundError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found")
+	msg := err.Error()
+	return strings.Contains(msg, "404") || strings.Contains(msg, "not found")
 }
 
 // waitForProcessingComplete polls until app processing is complete
@@ -687,7 +690,7 @@ func (r *appResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 
 	app, err := fetchApp(ctx, r.client, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}

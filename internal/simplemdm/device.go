@@ -2,7 +2,6 @@ package simplemdm
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 )
@@ -38,13 +37,11 @@ func (c *Client) DeviceCreate(name string, groupIDs []string) (*SimplemdmDefault
 	}
 
 	q := req.URL.Query()
-	// adding parameter name with variable name
 	q.Add("name", name)
 	for _, group := range groupIDs {
 		q.Add("static_group_ids[]", group)
 	}
 
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 
 	body, err := c.RequestResponse201(req)
@@ -70,10 +67,8 @@ func (c *Client) DeviceUpdate(deviceID string, name string, deviceMame string) (
 	}
 
 	q := req.URL.Query()
-	// checking if defaultvalue exist
 	q.Add("name", name)
 	q.Add("device_name", deviceMame)
-	// encoding all parameters
 	req.URL.RawQuery = q.Encode()
 
 	body, err := c.RequestResponse200(req)
@@ -98,15 +93,6 @@ func (c *Client) DeviceDelete(deviceID string) error {
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }

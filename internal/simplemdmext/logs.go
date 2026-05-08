@@ -9,12 +9,6 @@ import (
 	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 )
 
-// LogListResponse models the paginated log collection response.
-type LogListResponse struct {
-	Data    []LogData `json:"data"`
-	HasMore bool      `json:"has_more"`
-}
-
 // LogSingleResponse models the response for a single log lookup.
 type LogSingleResponse struct {
 	Data LogData `json:"data"`
@@ -107,18 +101,16 @@ func ListLogs(ctx context.Context, client *simplemdm.Client) ([]LogData, error) 
 			return nil, err
 		}
 
-		var resp LogListResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[LogData](body)
+		if err != nil {
 			return nil, err
 		}
 
-		results = append(results, resp.Data...)
-
-		if !resp.HasMore || len(resp.Data) == 0 {
+		results = append(results, page...)
+		if !hasMore || len(page) == 0 {
 			break
 		}
-
-		startingAfter = resp.Data[len(resp.Data)-1].ID
+		startingAfter = page[len(page)-1].ID
 	}
 
 	return results, nil

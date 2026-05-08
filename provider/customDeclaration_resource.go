@@ -306,7 +306,7 @@ func (r *customDeclarationResource) Read(ctx context.Context, req resource.ReadR
 
 	responseBody, err := r.client.RequestResponse200(httpReq)
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -479,7 +479,7 @@ func (r *customDeclarationResource) Delete(ctx context.Context, req resource.Del
 
 	_, err = r.client.RequestResponse204(httpReq)
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			return
 		}
 

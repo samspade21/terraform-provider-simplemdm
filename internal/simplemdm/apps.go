@@ -3,7 +3,6 @@ package simplemdm
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -99,17 +98,8 @@ func (c *Client) AppDelete(appId string) error {
 		return err
 	}
 
-	body, err := c.RequestResponse204(req)
-
-	if err != nil {
-		return err
-	}
-
-	if string(body) != "" {
-		return errors.New(string(body))
-	}
-
-	return nil
+	_, err = c.RequestResponse204(req)
+	return err
 }
 
 // AppUpdate - Updates an application (Not work for shared app)

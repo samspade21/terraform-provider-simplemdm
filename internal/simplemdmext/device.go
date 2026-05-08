@@ -15,12 +15,6 @@ type DeviceResponse struct {
 	Data DeviceData `json:"data"`
 }
 
-// DeviceListResponse models the paginated device collection response.
-type DeviceListResponse struct {
-	Data    []DeviceData `json:"data"`
-	HasMore bool         `json:"has_more"`
-}
-
 // DeviceData contains a device record with attributes and relationships.
 type DeviceData struct {
 	Type          string              `json:"type"`
@@ -152,19 +146,16 @@ func ListDevices(ctx context.Context, client *simplemdm.Client, search string, i
 			return nil, err
 		}
 
-		var resp DeviceListResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[DeviceData](body)
+		if err != nil {
 			return nil, err
 		}
 
-		results = append(results, resp.Data...)
-
-		if !resp.HasMore || len(resp.Data) == 0 {
+		results = append(results, page...)
+		if !hasMore || len(page) == 0 {
 			break
 		}
-
-		// Set cursor to last item's ID for next page
-		startingAfter = strconv.Itoa(resp.Data[len(resp.Data)-1].ID)
+		startingAfter = strconv.Itoa(page[len(page)-1].ID)
 	}
 
 	return results, nil
@@ -208,26 +199,19 @@ func listRelated(ctx context.Context, client *simplemdm.Client, deviceID, endpoi
 			return nil, err
 		}
 
-		var resp DeviceRelatedListResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[DeviceRelatedItem](body)
+		if err != nil {
 			return nil, err
 		}
 
-		allData = append(allData, resp.Data...)
-
-		// Stop if there are no more pages or no data returned
-		if !resp.HasMore || len(resp.Data) == 0 {
+		allData = append(allData, page...)
+		if !hasMore || len(page) == 0 {
 			break
 		}
-
-		// Set cursor to last item's ID for next page
-		startingAfter = resp.Data[len(resp.Data)-1].ID.String()
+		startingAfter = page[len(page)-1].ID.String()
 	}
 
-	return &DeviceRelatedListResponse{
-		Data:    allData,
-		HasMore: false,
-	}, nil
+	return &DeviceRelatedListResponse{Data: allData}, nil
 }
 
 // FlattenAttributes normalises an arbitrary map of attributes into a map of Terraform strings.

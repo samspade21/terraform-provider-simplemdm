@@ -15,12 +15,6 @@ type DepServerResponse struct {
 	Data DepServerData `json:"data"`
 }
 
-// DepServerListResponse models the list of DEP servers.
-type DepServerListResponse struct {
-	Data    []DepServerData `json:"data"`
-	HasMore bool            `json:"has_more"`
-}
-
 // DepServerData contains DEP server attributes.
 type DepServerData struct {
 	Type       string         `json:"type"`
@@ -38,12 +32,6 @@ type DepServerAttrs struct {
 	DevicesFetchedAt string `json:"devices_fetched_at"`
 	TokenExpiresAt   string `json:"token_expires_at"`
 	LastSyncedAt     string `json:"last_synced_at"`
-}
-
-// DepDeviceResponse models the list of DEP devices for a server.
-type DepDeviceListResponse struct {
-	Data    []DepDeviceData `json:"data"`
-	HasMore bool            `json:"has_more"`
 }
 
 // DepDeviceData contains DEP device attributes.
@@ -113,18 +101,16 @@ func ListDepServers(ctx context.Context, client *simplemdm.Client) ([]DepServerD
 			return nil, err
 		}
 
-		var resp DepServerListResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[DepServerData](body)
+		if err != nil {
 			return nil, err
 		}
 
-		results = append(results, resp.Data...)
-
-		if !resp.HasMore || len(resp.Data) == 0 {
+		results = append(results, page...)
+		if !hasMore || len(page) == 0 {
 			break
 		}
-
-		startingAfter = strconv.Itoa(resp.Data[len(resp.Data)-1].ID)
+		startingAfter = strconv.Itoa(page[len(page)-1].ID)
 	}
 
 	return results, nil
@@ -195,18 +181,16 @@ func ListDepDevices(ctx context.Context, client *simplemdm.Client, serverID stri
 			return nil, err
 		}
 
-		var resp DepDeviceListResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[DepDeviceData](body)
+		if err != nil {
 			return nil, err
 		}
 
-		results = append(results, resp.Data...)
-
-		if !resp.HasMore || len(resp.Data) == 0 {
+		results = append(results, page...)
+		if !hasMore || len(page) == 0 {
 			break
 		}
-
-		startingAfter = strconv.Itoa(resp.Data[len(resp.Data)-1].ID)
+		startingAfter = strconv.Itoa(page[len(page)-1].ID)
 	}
 
 	return results, nil

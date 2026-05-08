@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"strconv"
-	"strings"
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
@@ -230,7 +229,7 @@ func (r *deviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	apiDevice, err := simplemdmext.GetDevice(ctx, r.client, state.ID.ValueString(), true)
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
