@@ -63,7 +63,6 @@ output "group_details" {
 - `group_count` (Number) Number of device groups currently assigned to the assignment group.
 - `group_type` (String) The type of assignment group (standard or munki).
 - `groups` (Set of String) IDs of device groups assigned to the assignment group.
-- `install_type` (String) Install type used when the assignment group is of type munki.
 - `name` (String) The name of the assignment group.
 - `priority` (Number) The priority of the assignment group.
 - `profiles` (Set of String) IDs of profiles assigned to the assignment group.

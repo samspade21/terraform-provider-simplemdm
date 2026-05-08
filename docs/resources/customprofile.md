@@ -10,18 +10,6 @@ description: |-
 
 Custom Profile resource can be used to manage Custom Profile. Can be used together with Device(s), Assignment Group(s) or Device Group(s) and set addition details regarding Custom Profile.
 
-> **Scope: this resource only manages `custom_configuration_profile` records.**
-> The SimpleMDM API exposes many other profile types (`file_vault`,
-> `system_extension_policy`, `privacy_preference`, `notification_settings`,
-> `wireless_network`, `passcode_policy`, etc.) under the same `/profiles`
-> endpoint, but the `/custom_configuration_profiles` endpoint that this
-> resource targets only round-trips custom mobileconfig profiles. The
-> `simplemdm_profiles` data source returns *every* profile type, so a profile
-> ID listed there isn't necessarily importable here. To import a non-custom
-> profile you must first export its `.mobileconfig` from the SimpleMDM web UI
-> and create a `simplemdm_customprofile` from it. For Declarative Device
-> Management profiles, use `simplemdm_customdeclaration` instead.
-
 ## Example Usage
 
 ```terraform
