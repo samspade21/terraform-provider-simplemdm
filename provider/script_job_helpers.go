@@ -6,12 +6,76 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+// scriptJobErrorHint inspects the tenant when a script_job create fails and
+// returns a human-friendly addendum that tells the operator *why* the call
+// likely failed. SimpleMDM's 422 on script_jobs is opaque — the only signal
+// is the URL — so we look up devices and produce one of:
+//
+//   - "" (no useful hint to add)
+//   - "the tenant has no enrolled devices" (most common when CI runs
+//     against an empty test tenant)
+//   - "device IDs <ids> are not enrolled" (when the user references devices
+//     that are still in awaiting_enrollment, deleted, etc.)
+//
+// Best-effort: any error fetching the device list silently returns "".
+// Script jobs only run on macOS, so we additionally call out non-macOS
+// targets.
+func scriptJobErrorHint(ctx context.Context, client *simplemdm.Client, deviceIDs []string) string {
+	devices, err := simplemdmext.ListDevices(ctx, client, "", true, false)
+	if err != nil {
+		return ""
+	}
+
+	if len(devices) == 0 {
+		return "Hint: the tenant has no devices at all. Script jobs require at least one enrolled macOS device target. Enroll a device through the SimpleMDM web UI before re-running."
+	}
+
+	enrolled := map[string]map[string]any{}
+	for i := range devices {
+		if status, _ := devices[i].Attributes["status"].(string); status == "enrolled" {
+			enrolled[strconv.Itoa(devices[i].ID)] = devices[i].Attributes
+		}
+	}
+
+	if len(enrolled) == 0 {
+		return "Hint: the tenant has devices but none are in `enrolled` state (script jobs can only target enrolled devices). Wait for enrollment to complete or enroll a new device."
+	}
+
+	// If the user passed device_ids explicitly, see which of them are valid macOS targets.
+	if len(deviceIDs) == 0 {
+		return ""
+	}
+	bad := []string{}
+	nonMac := []string{}
+	for _, id := range deviceIDs {
+		attrs, ok := enrolled[id]
+		if !ok {
+			bad = append(bad, id)
+			continue
+		}
+		if pname, _ := attrs["product_name"].(string); !strings.HasPrefix(pname, "Mac") && !strings.Contains(pname, "iMac") && !strings.Contains(pname, "MacBook") && !strings.HasPrefix(pname, "Macmini") {
+			nonMac = append(nonMac, id)
+		}
+	}
+	switch {
+	case len(bad) > 0 && len(nonMac) > 0:
+		return fmt.Sprintf("Hint: device IDs %s are not enrolled, and %s are non-macOS (script jobs only run on macOS).", strings.Join(bad, ", "), strings.Join(nonMac, ", "))
+	case len(bad) > 0:
+		return fmt.Sprintf("Hint: device IDs %s are not in `enrolled` state. Script jobs can only target enrolled devices.", strings.Join(bad, ", "))
+	case len(nonMac) > 0:
+		return fmt.Sprintf("Hint: device IDs %s are non-macOS. Script jobs only run on macOS devices.", strings.Join(nonMac, ", "))
+	}
+	return ""
+}
 
 type scriptJobDeviceDetail struct {
 	ID         string

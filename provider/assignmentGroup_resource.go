@@ -9,6 +9,7 @@ import (
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -37,6 +38,8 @@ type assignment_groupResourceModel struct {
 	AppTrackLocation    types.Bool   `tfsdk:"app_track_location"`
 	ID                  types.String `tfsdk:"id"`
 	Apps                types.Set    `tfsdk:"apps"`
+	AppsInstallTypes    types.Map    `tfsdk:"apps_install_types"`
+	AppsDeploymentTypes types.Map    `tfsdk:"apps_deployment_types"`
 	AppsUpdate          types.Bool   `tfsdk:"apps_update"`
 	AppsPush            types.Bool   `tfsdk:"apps_push"`
 	Profiles            types.Set    `tfsdk:"profiles"`
@@ -130,7 +133,27 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 				ElementType: types.StringType,
 				Optional:    true,
 				Computed:    true,
-				Description: "Optional. List of Apps assigned to this assignment group",
+				Description: "Optional. Set of app IDs assigned to this assignment group. Each app is sent through POST /assignment_groups/{id}/apps/{app_id} with `deployment_type` / `install_type` taken from the matching entry in `apps_deployment_types` / `apps_install_types`, or SimpleMDM defaults if no entry exists.",
+			},
+			"apps_install_types": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Optional. Per-app `install_type` overrides keyed by app ID. Only the apps you list here use a non-default install_type; apps in the `apps` set without an entry here use SimpleMDM's default (`managed`). Valid values: `managed`, `self_serve`, `default_installs`, `managed_updates`. Has no effect for non-Munki (`standard`) groups.",
+				Validators: []validator.Map{
+					mapvalidator.ValueStringsAre(
+						stringvalidator.OneOf("managed", "self_serve", "default_installs", "managed_updates"),
+					),
+				},
+			},
+			"apps_deployment_types": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Optional. Per-app `deployment_type` overrides keyed by app ID. Valid values: `standard`, `munki`. If unset for an app, SimpleMDM picks based on the assignment group's `group_type`.",
+				Validators: []validator.Map{
+					mapvalidator.ValueStringsAre(
+						stringvalidator.OneOf("standard", "munki"),
+					),
+				},
 			},
 			"apps_update": schema.BoolAttribute{
 				Optional:    true,
@@ -294,8 +317,27 @@ func (r *assignment_groupResource) Create(ctx context.Context, req resource.Crea
 
 	plan.ID = types.StringValue(strconv.Itoa(assignmentgroup.Data.ID))
 
-	// Assign all apps in plan
-	if err := assignObjectsToGroup(ctx, r.client, plan.ID.ValueString(), plan.Apps, "apps", false); err != nil {
+	// Block until the new assignment group is addressable. SimpleMDM has a
+	// brief eventual-consistency window between when /assignment_groups POST
+	// returns the new ID and when /assignment_groups/{id}/<rel>/{otherID}
+	// endpoints start responding. Doing the GET-before-assign here is more
+	// reliable than retrying each individual assign call.
+	if err := waitForAssignmentGroupAddressable(ctx, r.client, plan.ID.ValueString()); err != nil {
+		resp.Diagnostics.AddError(
+			"Error waiting for assignment group to become addressable",
+			"Could not read assignment group "+plan.ID.ValueString()+" after creation: "+err.Error(),
+		)
+		return
+	}
+
+	// Assign all apps in plan, applying per-app install_type / deployment_type
+	// overrides where the user supplied them.
+	if err := assignAppsToGroup(
+		ctx, r.client, plan.ID.ValueString(),
+		plan.Apps,
+		stringMapFromTypesMap(plan.AppsInstallTypes),
+		stringMapFromTypesMap(plan.AppsDeploymentTypes),
+	); err != nil {
 		resp.Diagnostics.AddError(
 			"Error assigning apps to assignment group",
 			"Could not assign apps to assignment group, unexpected error: "+err.Error(),
@@ -456,8 +498,13 @@ func (r *assignment_groupResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	// Update all assigned apps
-	if err := updateAssignmentGroupObjects(ctx, r.client, plan.ID.ValueString(), state.Apps, plan.Apps, "apps", false); err != nil {
+	// Update all assigned apps with their per-app install_type / deployment_type overrides
+	if err := updateAssignmentGroupApps(
+		ctx, r.client, plan.ID.ValueString(),
+		state.Apps, plan.Apps,
+		stringMapFromTypesMap(state.AppsInstallTypes), stringMapFromTypesMap(plan.AppsInstallTypes),
+		stringMapFromTypesMap(state.AppsDeploymentTypes), stringMapFromTypesMap(plan.AppsDeploymentTypes),
+	); err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating assignment group app assignments",
 			"Could not update assignment group app assignments, unexpected error: "+err.Error(),

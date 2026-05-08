@@ -263,7 +263,12 @@ func (c *Client) AttributeGetAttributesForGroup(groupID string) (*AttributeArray
 	return &attributes, nil
 }
 
-func (c *Client) AssignmentGroupAssignApp(groupID string, appID string, deploymnetType string, InstallType string) error {
+// AssignmentGroupAssignApp assigns an app to an assignment group with optional
+// deployment_type and install_type. Empty strings mean "use SimpleMDM
+// defaults" — they are omitted from the query rather than sent as
+// `deployment_type=` (which the API rejects with 400 "Deployment type can't
+// be blank").
+func (c *Client) AssignmentGroupAssignApp(groupID string, appID string, deploymentType string, installType string) error {
 	url := fmt.Sprintf("https://%s/api/v1/assignment_groups/%s/apps/%s", c.HostName, groupID, appID)
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
@@ -271,22 +276,21 @@ func (c *Client) AssignmentGroupAssignApp(groupID string, appID string, deploymn
 	}
 
 	q := req.URL.Query()
-
-	q.Add("deployment_type", deploymnetType)
-	q.Add("install_type", InstallType)
-
+	if deploymentType != "" {
+		q.Add("deployment_type", deploymentType)
+	}
+	if installType != "" {
+		q.Add("install_type", installType)
+	}
 	req.URL.RawQuery = q.Encode()
 
 	body, err := c.RequestResponse204(req)
-
 	if err != nil {
 		return err
 	}
-
 	if string(body) != "" {
 		return errors.New(string(body))
 	}
-
 	return nil
 }
 

@@ -277,10 +277,17 @@ func (r *scriptJobResource) Create(ctx context.Context, req resource.CreateReque
 		customAttributeRegex,
 	)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error creating script job",
-			"Could not create script job, unexpected error: "+err.Error(),
-		)
+		// SimpleMDM rejects script_job create with a generic 422 when the
+		// targets don't include any actually-enrolled macOS devices. Look up
+		// the tenant once and add a friendlier hint to the diagnostic so the
+		// user knows whether the problem is "tenant has no devices" or
+		// "the specific IDs you passed aren't enrolled / aren't macOS".
+		hint := scriptJobErrorHint(ctx, r.client, deviceIDs)
+		message := "Could not create script job, unexpected error: " + err.Error()
+		if hint != "" {
+			message += "\n\n" + hint
+		}
+		resp.Diagnostics.AddError("Error creating script job", message)
 		return
 	}
 

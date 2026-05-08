@@ -108,10 +108,66 @@ func createAssignmentGroup(ctx context.Context, client *simplemdm.Client, payloa
 
 	var assignmentGroup assignmentGroupResponse
 	if err := json.Unmarshal(body, &assignmentGroup); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode assignment group create response: %w (body=%s)", err, string(body))
 	}
 
+	if assignmentGroup.Data.ID != 0 {
+		return &assignmentGroup, nil
+	}
+
+	// SimpleMDM's New Groups Experience accounts return `"id": null` in the
+	// POST /assignment_groups response — the create succeeded but the body
+	// can't tell us the new ID. Recover by listing /assignment_groups and
+	// matching on name. The list is sorted newest-first, so we take the
+	// first match (most-recently created group with that name).
+	id, listErr := lookupAssignmentGroupIDByName(ctx, client, payload.Name)
+	if listErr != nil {
+		return nil, fmt.Errorf("create returned id=null and follow-up list lookup failed: %w (create body=%s)", listErr, string(body))
+	}
+	if id == 0 {
+		return nil, fmt.Errorf("assignment group %q created but cannot be found in /assignment_groups list (create body=%s)", payload.Name, string(body))
+	}
+	assignmentGroup.Data.ID = id
 	return &assignmentGroup, nil
+}
+
+// lookupAssignmentGroupIDByName fetches /assignment_groups (filtered with
+// `search=<name>`) and returns the ID of the most-recently-created group
+// with the given exact name. Used to recover from POST responses that omit
+// the new ID (New Groups Experience accounts).
+func lookupAssignmentGroupIDByName(ctx context.Context, client *simplemdm.Client, name string) (int, error) {
+	endpoint := fmt.Sprintf("https://%s/api/v1/assignment_groups", client.HostName)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return 0, err
+	}
+	q := req.URL.Query()
+	q.Set("search", name)
+	q.Set("limit", "100")
+	req.URL.RawQuery = q.Encode()
+
+	body, err := client.RequestResponse200(req)
+	if err != nil {
+		return 0, err
+	}
+	var resp struct {
+		Data []struct {
+			ID         int `json:"id"`
+			Attributes struct {
+				Name string `json:"name"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return 0, err
+	}
+	// Prefer an exact-name match (search is fuzzy).
+	for _, g := range resp.Data {
+		if g.Attributes.Name == name && g.ID != 0 {
+			return g.ID, nil
+		}
+	}
+	return 0, nil
 }
 
 func updateAssignmentGroup(ctx context.Context, client *simplemdm.Client, id string, payload assignmentGroupUpsertRequest) error {
@@ -272,14 +328,16 @@ func setElementsToStringSlice(set types.Set) []string {
 }
 
 // assignObjectsToGroup assigns multiple objects to an assignment group.
-// Used during Create operations to assign apps, profiles, groups, or devices.
+// Used during Create operations to assign profiles, groups, or devices.
+// For apps see assignAppsToGroup which handles the per-app parameter
+// overrides (install_type / deployment_type).
 //
 // SimpleMDM has a brief eventual-consistency window between when a freshly
 // created assignment group becomes addressable by ID and when its associated
 // /assignment_groups/{id}/<rel>/{otherID} endpoints start responding. The
 // first call after Create occasionally 404s for a few seconds before
-// settling. Retrying with backoff (3 attempts, ~500ms / 1s / 2s) is enough
-// to ride out the window without slowing down the happy path.
+// settling. Retrying with backoff is enough to ride out the window without
+// slowing down the happy path.
 func assignObjectsToGroup(
 	ctx context.Context,
 	client *simplemdm.Client,
@@ -314,14 +372,77 @@ func assignObjectsToGroup(
 	return nil
 }
 
+// assignAppsToGroup is the apps-specific version of assignObjectsToGroup
+// that goes through the SimpleMDM "Assign App" endpoint
+// (POST /api/v1/assignment_groups/{id}/apps/{app_id}) which accepts optional
+// `deployment_type` and `install_type` query params. The per-app overrides
+// come from the resource's `apps_deployment_types` / `apps_install_types`
+// maps; apps without an entry are sent without overrides and SimpleMDM
+// applies the defaults documented at
+// https://api.simplemdm.com/v1#assign-app.
+func assignAppsToGroup(
+	ctx context.Context,
+	client *simplemdm.Client,
+	groupID string,
+	apps types.Set,
+	installTypes map[string]string,
+	deploymentTypes map[string]string,
+) error {
+	if apps.IsNull() || apps.IsUnknown() {
+		return nil
+	}
+
+	for _, appElem := range apps.Elements() {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("operation cancelled: %w", err)
+		}
+		appID := appElem.(types.String).ValueString()
+		install := installTypes[appID]
+		deployment := deploymentTypes[appID]
+
+		assign := func() error {
+			return client.AssignmentGroupAssignApp(groupID, appID, deployment, install)
+		}
+		if err := retryOn404(ctx, assign); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// stringMapFromTypesMap converts a types.Map of strings into a Go map.
+// Returns an empty map when the input is null / unknown so callers can use
+// `m[key]` safely.
+func stringMapFromTypesMap(m types.Map) map[string]string {
+	if m.IsNull() || m.IsUnknown() {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(m.Elements()))
+	for k, v := range m.Elements() {
+		if str, ok := v.(types.String); ok {
+			out[k] = str.ValueString()
+		}
+	}
+	return out
+}
+
 // retryOn404 calls fn and, if it returns a 404 error, retries with
 // exponential backoff. Returns the last error if all attempts fail. Other
 // error types are returned immediately.
 //
 // Used to ride out the eventual-consistency window between Create and the
-// associated relationship endpoints becoming addressable.
+// associated relationship endpoints becoming addressable. Total wait
+// across all retries is ~30s (1+2+4+8+15s) which we found empirically
+// to cover SimpleMDM's worst-case propagation delay on freshly-created
+// assignment groups.
 func retryOn404(ctx context.Context, fn func() error) error {
-	delays := []time.Duration{500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
+	delays := []time.Duration{
+		1 * time.Second,
+		2 * time.Second,
+		4 * time.Second,
+		8 * time.Second,
+		15 * time.Second,
+	}
 	var lastErr error
 	for attempt := 0; attempt <= len(delays); attempt++ {
 		if err := ctx.Err(); err != nil {
@@ -341,6 +462,89 @@ func retryOn404(ctx context.Context, fn func() error) error {
 		}
 	}
 	return lastErr
+}
+
+// waitForAssignmentGroupAddressable blocks until /assignment_groups/{id}
+// returns 200, or times out. Called after Create to ride out the
+// eventual-consistency window before any per-relationship assign calls.
+// Empirically, GETting the group as soon as it becomes addressable is a
+// reliable signal that the relationship sub-resources are also addressable.
+func waitForAssignmentGroupAddressable(ctx context.Context, client *simplemdm.Client, groupID string) error {
+	return retryOn404(ctx, func() error {
+		_, err := fetchAssignmentGroup(ctx, client, groupID)
+		return err
+	})
+}
+
+// updateAssignmentGroupApps reconciles the apps assigned to an assignment
+// group between state and plan. New apps go through AssignmentGroupAssignApp
+// so per-app install_type / deployment_type overrides apply; removed apps
+// go through AssignmentGroupUnAssignApp.
+//
+// Apps that stay in the set but whose install_type or deployment_type
+// changed are re-assigned (the API treats this as idempotent — it just
+// updates the existing relationship).
+func updateAssignmentGroupApps(
+	ctx context.Context,
+	client *simplemdm.Client,
+	groupID string,
+	stateApps, planApps types.Set,
+	stateInstall, planInstall map[string]string,
+	stateDeploy, planDeploy map[string]string,
+) error {
+	if planApps.IsNull() || planApps.IsUnknown() {
+		return nil
+	}
+	if stateApps.IsNull() || stateApps.IsUnknown() {
+		stateApps = types.SetNull(types.StringType)
+	}
+
+	stateSlice := setElementsToStringSlice(stateApps)
+	planSlice := setElementsToStringSlice(planApps)
+	toAdd, toRemove := diffFunction(stateSlice, planSlice)
+
+	for _, appID := range toAdd {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("operation cancelled: %w", err)
+		}
+		if err := client.AssignmentGroupAssignApp(groupID, appID, planDeploy[appID], planInstall[appID]); err != nil {
+			return err
+		}
+	}
+
+	// Re-assign apps whose overrides changed in the new plan.
+	for _, appID := range planSlice {
+		if !contains(stateSlice, appID) {
+			continue // already added above
+		}
+		if planInstall[appID] != stateInstall[appID] || planDeploy[appID] != stateDeploy[appID] {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("operation cancelled: %w", err)
+			}
+			if err := client.AssignmentGroupAssignApp(groupID, appID, planDeploy[appID], planInstall[appID]); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, appID := range toRemove {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("operation cancelled: %w", err)
+		}
+		if err := client.AssignmentGroupUnAssignApp(groupID, appID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }
 
 // updateAssignmentGroupObjects updates assignments by computing diff and applying changes

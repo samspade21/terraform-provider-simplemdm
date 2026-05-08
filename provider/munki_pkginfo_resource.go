@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 
 	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -15,8 +17,9 @@ import (
 )
 
 var (
-	_ resource.Resource              = &munkiPkgInfoResource{}
-	_ resource.ResourceWithConfigure = &munkiPkgInfoResource{}
+	_ resource.Resource                = &munkiPkgInfoResource{}
+	_ resource.ResourceWithConfigure   = &munkiPkgInfoResource{}
+	_ resource.ResourceWithImportState = &munkiPkgInfoResource{}
 )
 
 type munkiPkgInfoResource struct {
@@ -148,4 +151,22 @@ func (r *munkiPkgInfoResource) Delete(ctx context.Context, req resource.DeleteRe
 		// Some apps don't support pkginfo deletion - warn but don't fail.
 		resp.Diagnostics.AddWarning("Failed to delete Munki pkginfo", err.Error())
 	}
+}
+
+// ImportState parses the composite id `munki_pkginfo:<app_id>` so importing
+// also populates `app_id` (without it the resource would show drift on the
+// next plan). The pkginfo body itself is unreadable via the API, so it stays
+// unknown after import — first apply will re-upload from the user's config.
+func (r *munkiPkgInfoResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	id := req.ID
+	appID := strings.TrimPrefix(id, "munki_pkginfo:")
+	if appID == id || appID == "" {
+		resp.Diagnostics.AddError(
+			"Invalid import ID",
+			"Expected `munki_pkginfo:<app_id>` for simplemdm_munki_pkginfo (the same value the resource produces in its id attribute).",
+		)
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("app_id"), appID)...)
 }
