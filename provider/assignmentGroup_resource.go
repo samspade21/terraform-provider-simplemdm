@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -33,7 +32,6 @@ var (
 type assignment_groupResourceModel struct {
 	Name                types.String `tfsdk:"name"`
 	AutoDeploy          types.Bool   `tfsdk:"auto_deploy"`
-	GroupType           types.String `tfsdk:"group_type"`
 	Priority            types.Int64  `tfsdk:"priority"`
 	AppTrackLocation    types.Bool   `tfsdk:"app_track_location"`
 	ID                  types.String `tfsdk:"id"`
@@ -100,21 +98,6 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 				Default:     booldefault.StaticBool(true),
 				Description: "Optional. Whether the Apps should be automatically pushed to device(s) when they join this Assignment Group. Defaults to true",
 			},
-			"group_type": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				Default:  stringdefault.StaticString("standard"),
-				Validators: []validator.String{
-					// Validate string value must be "standard" or "munki"
-					stringvalidator.OneOf("standard", "munki"),
-				},
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-					&useConfigForDeprecatedGroupType{},
-				},
-				Description: "Optional. Type of assignment group. Must be one of standard (for MDM app/media deployments) or munki for Munki app deployments. Defaults to standard. " +
-					"⚠️ DEPRECATED: This field is deprecated by the SimpleMDM API and may be ignored for accounts using the New Groups Experience.",
-			},
 			"priority": schema.Int64Attribute{
 				Optional: true,
 				Computed: true,
@@ -148,7 +131,7 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 			"apps_deployment_types": schema.MapAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Optional. Per-app `deployment_type` overrides keyed by app ID. Valid values: `standard`, `munki`. If unset for an app, SimpleMDM picks based on the assignment group's `group_type`.",
+				Description: "Optional. Per-app `deployment_type` overrides keyed by app ID. Valid values: `standard`, `munki`. If unset for an app, SimpleMDM picks based on the assignment group's underlying type.",
 				Validators: []validator.Map{
 					mapvalidator.ValueStringsAre(
 						stringvalidator.OneOf("standard", "munki"),
@@ -218,41 +201,6 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 	}
 }
 
-// useConfigForDeprecatedGroupType is a plan modifier that preserves the config value
-// for the deprecated group_type field. The SimpleMDM API may return different values
-// (e.g., "static") for accounts using the New Groups Experience, but we want to
-// maintain the user's configured value to avoid spurious diffs.
-type useConfigForDeprecatedGroupType struct{}
-
-func (m *useConfigForDeprecatedGroupType) Description(ctx context.Context) string {
-	return "Preserves configured group_type value even if API returns different value for this deprecated field"
-}
-
-func (m *useConfigForDeprecatedGroupType) MarkdownDescription(ctx context.Context) string {
-	return "Preserves configured group_type value even if API returns different value for this deprecated field"
-}
-
-func (m *useConfigForDeprecatedGroupType) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
-	// If this is a new resource (no state), let the default/config value flow through
-	if req.State.Raw.IsNull() {
-		return
-	}
-
-	// If config is null/unknown, use state value
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-
-	// If state is null/unknown, use config value
-	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
-		return
-	}
-
-	// For this deprecated field, always preserve the config value
-	// This prevents API differences (e.g., "static" vs "standard") from causing drift
-	resp.PlanValue = req.ConfigValue
-}
-
 // syncProfilesWithRetry handles profile sync with rate limit retry logic
 func (r *assignment_groupResource) syncProfilesWithRetry(ctx context.Context, groupID string) error {
 	maxRetries := 3
@@ -303,7 +251,6 @@ func (r *assignment_groupResource) Create(ctx context.Context, req resource.Crea
 	assignmentgroup, err := createAssignmentGroup(ctx, r.client, assignmentGroupUpsertRequest{
 		Name:             plan.Name.ValueString(),
 		AutoDeploy:       boolPointerFromType(plan.AutoDeploy),
-		GroupType:        stringPointerFromType(plan.GroupType),
 		Priority:         int64PointerFromType(plan.Priority),
 		AppTrackLocation: boolPointerFromType(plan.AppTrackLocation),
 	})
@@ -486,7 +433,6 @@ func (r *assignment_groupResource) Update(ctx context.Context, req resource.Upda
 	err := updateAssignmentGroup(ctx, r.client, plan.ID.ValueString(), assignmentGroupUpsertRequest{
 		Name:             plan.Name.ValueString(),
 		AutoDeploy:       boolPointerFromType(plan.AutoDeploy),
-		GroupType:        stringPointerFromType(plan.GroupType),
 		Priority:         int64PointerFromType(plan.Priority),
 		AppTrackLocation: boolPointerFromType(plan.AppTrackLocation),
 	})

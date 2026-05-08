@@ -1,4 +1,4 @@
-# List all assignment groups and filter by type
+# List all assignment groups and filter
 data "simplemdm_assignmentgroups" "all" {}
 
 # Filter by auto-deploy enabled
@@ -6,9 +6,9 @@ output "auto_deploy_groups" {
   value = [for group in data.simplemdm_assignmentgroups.all.assignment_groups : group.name if group.auto_deploy]
 }
 
-# Filter by group type
-output "standard_groups" {
-  value = [for group in data.simplemdm_assignmentgroups.all.assignment_groups : group.name if group.group_type == "standard"]
+# Filter by app-track-location enabled
+output "location_tracking_groups" {
+  value = [for group in data.simplemdm_assignmentgroups.all.assignment_groups : group.name if group.app_track_location]
 }
 
 # Get groups sorted by priority

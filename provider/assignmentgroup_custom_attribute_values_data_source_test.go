@@ -22,7 +22,6 @@ func TestAccAssignmentGroupCustomAttributeValuesDataSource(t *testing.T) {
 resource "simplemdm_assignmentgroup" "fixture" {
   name        = "tf-acc-cav-test"
   auto_deploy = false
-  group_type  = "standard"
 }
 
 data "simplemdm_assignmentgroup_custom_attribute_values" "test" {

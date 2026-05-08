@@ -21,7 +21,6 @@ resource "simplemdm_attribute" "region" {
 resource "simplemdm_assignmentgroup" "engineering" {
   name        = "engineering"
   auto_deploy = true
-  group_type  = "standard"
 }
 
 resource "simplemdm_assignmentgroup_custom_attribute_value" "engineering_region" {

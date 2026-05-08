@@ -43,7 +43,6 @@ type Attributes struct {
 	Type                   string `json:"type"`
 	Priority               int    `json:"priority,omitempty"`
 	AppTrackLocation       bool   `json:"app_track_location"`
-	GroupType              string `json:"group_type"`
 	InstallType            string `json:"install_type"`
 	DefaultValue           string `json:"default_value"`
 	ReinstallAfterOsUpdate bool   `json:"reinstall_after_os_update"`
@@ -130,7 +129,6 @@ type Groups struct {
 type Data struct {
 	Type           string `json:"type"`
 	ID             int    `json:"id"`
-	GroupType      string `json:"group_type,omitempty"`
 	InstallType    string `json:"install_type,omitempty"`
 	DeploymnetType string `json:"deployment_type,omitempty"`
 }

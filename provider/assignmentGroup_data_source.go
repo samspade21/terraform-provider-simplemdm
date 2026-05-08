@@ -22,7 +22,6 @@ type assignmentGroupDataSourceModel struct {
 	ID               types.String `tfsdk:"id"`
 	Name             types.String `tfsdk:"name"`
 	AutoDeploy       types.Bool   `tfsdk:"auto_deploy"`
-	GroupType        types.String `tfsdk:"group_type"`
 	Priority         types.Int64  `tfsdk:"priority"`
 	AppTrackLocation types.Bool   `tfsdk:"app_track_location"`
 	Apps             types.Set    `tfsdk:"apps"`
@@ -68,10 +67,6 @@ func (d *assignmentGroupDataSource) Schema(_ context.Context, _ datasource.Schem
 			"auto_deploy": schema.BoolAttribute{
 				Computed:    true,
 				Description: "Whether the assignment group automatically deploys apps.",
-			},
-			"group_type": schema.StringAttribute{
-				Computed:    true,
-				Description: "The type of assignment group (standard or munki).",
 			},
 			"priority": schema.Int64Attribute{
 				Computed:    true,

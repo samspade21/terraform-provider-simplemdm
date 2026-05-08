@@ -27,7 +27,6 @@ type assignmentGroupResponse struct {
 type assignmentGroupAttributes struct {
 	Name             string `json:"name"`
 	AutoDeploy       bool   `json:"auto_deploy"`
-	GroupType        string `json:"group_type"`
 	CreatedAt        string `json:"created_at"`
 	UpdatedAt        string `json:"updated_at"`
 	DeviceCount      int    `json:"device_count"`
@@ -87,7 +86,6 @@ func buildStringSetFromRelationshipItems(items []assignmentGroupRelationshipItem
 type assignmentGroupUpsertRequest struct {
 	Name             string
 	AutoDeploy       *bool
-	GroupType        *string
 	Priority         *int64
 	AppTrackLocation *bool
 }
@@ -196,7 +194,6 @@ func buildAssignmentGroupQuery(payload assignmentGroupUpsertRequest, includeName
 	}
 
 	setOptionalBool(values, "auto_deploy", payload.AutoDeploy)
-	setOptionalString(values, "type", payload.GroupType)
 
 	if payload.Priority != nil {
 		values.Set("priority", strconv.FormatInt(*payload.Priority, 10))
@@ -249,14 +246,6 @@ func applyAssignmentGroupResponseToResourceModel(model *assignment_groupResource
 	model.Name = types.StringValue(response.Data.Attributes.Name)
 	model.AutoDeploy = types.BoolValue(response.Data.Attributes.AutoDeploy)
 
-	// Preserve existing group_type value if present (deprecated field)
-	// The API may return different values (e.g., "static") for accounts using New Groups Experience
-	// but we want to maintain the user's configured value ("standard" or "munki") to avoid drift
-	if model.GroupType.IsNull() || model.GroupType.IsUnknown() {
-		model.GroupType = types.StringValue(response.Data.Attributes.GroupType)
-	}
-	// Otherwise keep the existing model.GroupType value
-
 	if response.Data.Attributes.Priority != nil {
 		model.Priority = types.Int64Value(int64(*response.Data.Attributes.Priority))
 	} else {
@@ -269,7 +258,6 @@ func applyAssignmentGroupResponseToResourceModel(model *assignment_groupResource
 		model.AppTrackLocation = types.BoolNull()
 	}
 
-	// Always set CreatedAt and UpdatedAt for resources too
 	model.CreatedAt = types.StringValue(response.Data.Attributes.CreatedAt)
 	model.UpdatedAt = types.StringValue(response.Data.Attributes.UpdatedAt)
 
@@ -281,7 +269,6 @@ func applyAssignmentGroupResponseToDataSourceModel(model *assignmentGroupDataSou
 	model.ID = types.StringValue(strconv.Itoa(response.Data.ID))
 	model.Name = types.StringValue(response.Data.Attributes.Name)
 	model.AutoDeploy = types.BoolValue(response.Data.Attributes.AutoDeploy)
-	model.GroupType = types.StringValue(response.Data.Attributes.GroupType)
 
 	if response.Data.Attributes.Priority != nil {
 		model.Priority = types.Int64Value(int64(*response.Data.Attributes.Priority))

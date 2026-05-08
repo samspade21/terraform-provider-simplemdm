@@ -85,7 +85,6 @@ func TestAccAssignmentGroupResource(t *testing.T) {
 resource "simplemdm_assignmentgroup" "testgroup2" {
   name                  = "Test Assignment Group Resource"
   auto_deploy           = false
-  group_type            = "standard"
   priority              = 3
   app_track_location    = false
   apps                  = [simplemdm_app.fixture.id]
@@ -97,7 +96,6 @@ resource "simplemdm_assignmentgroup" "testgroup2" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "name", "Test Assignment Group Resource"),
-					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "group_type", "standard"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "priority", "3"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "app_track_location", "false"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "devices_remove_others", "true"),
@@ -109,7 +107,7 @@ resource "simplemdm_assignmentgroup" "testgroup2" {
 				ResourceName:            "simplemdm_assignmentgroup.testgroup2",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"apps_update", "apps_push", "auto_deploy", "profiles_sync", "group_type", "profiles", "apps", "created_at", "updated_at", "device_count", "group_count", "devices_remove_others"},
+				ImportStateVerifyIgnore: []string{"apps_update", "apps_push", "auto_deploy", "profiles_sync", "profiles", "apps", "created_at", "updated_at", "device_count", "group_count", "devices_remove_others"},
 			},
 			// Update and Read testing — verifies mutable scalar updates.
 			{
@@ -117,7 +115,6 @@ resource "simplemdm_assignmentgroup" "testgroup2" {
 resource "simplemdm_assignmentgroup" "testgroup2" {
   name                  = "Updated Assignment Group Resource"
   auto_deploy           = false
-  group_type            = "standard"
   priority              = 7
   app_track_location    = true
   apps                  = [simplemdm_app.fixture.id]
@@ -129,7 +126,6 @@ resource "simplemdm_assignmentgroup" "testgroup2" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "name", "Updated Assignment Group Resource"),
-					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "group_type", "standard"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "priority", "7"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "app_track_location", "true"),
 					resource.TestCheckResourceAttr("simplemdm_assignmentgroup.testgroup2", "devices_remove_others", "false"),
@@ -158,7 +154,6 @@ func TestAccAssignmentGroupResource_Import(t *testing.T) {
 resource "simplemdm_assignmentgroup" "test_import" {
   name        = "Test Import Group"
   auto_deploy = true
-  group_type  = "standard"
   priority    = 5
 }
 `,
@@ -168,7 +163,7 @@ resource "simplemdm_assignmentgroup" "test_import" {
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateVerifyIgnore: []string{
-					"apps_update", "apps_push", "profiles_sync", "devices_remove_others", "group_type",
+					"apps_update", "apps_push", "profiles_sync", "devices_remove_others",
 				},
 			},
 		},
@@ -196,7 +191,6 @@ resource "simplemdm_app" "fixture" {
 resource "simplemdm_assignmentgroup" "test_relationships" {
   name        = "Test Relationships Group"
   auto_deploy = false
-  group_type  = "standard"
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -214,7 +208,6 @@ resource "simplemdm_app" "fixture" {
 resource "simplemdm_assignmentgroup" "test_relationships" {
   name        = "Test Relationships Group"
   auto_deploy = false
-  group_type  = "standard"
   apps        = [simplemdm_app.fixture.id]
 }
 `,
@@ -239,7 +232,6 @@ func TestAccAssignmentGroupResource_RateLimitHandling(t *testing.T) {
 resource "simplemdm_assignmentgroup" "test_ratelimit" {
   name          = "Test Rate Limit Group"
   auto_deploy   = false
-  group_type    = "standard"
   profiles_sync = true
 }
 `,

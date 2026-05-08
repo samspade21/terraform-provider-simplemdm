@@ -30,21 +30,24 @@ resource "simplemdm_assignmentgroup" "with_commands" {
   profiles_sync = false
 }
 
-# Example 3: Legacy Munki Group (Deprecated)
-resource "simplemdm_assignmentgroup" "legacy_munki" {
-  name = "Legacy Munki Group"
+# Example 3: Munki Per-App Overrides
+resource "simplemdm_assignmentgroup" "munki_overrides" {
+  name = "Munki Group"
 
-  # ⚠️ DEPRECATED: group_type may be ignored for New Groups Experience
-  # Valid values: "standard" or "munki", defaults to standard
-  # Changing this will destroy and recreate the group
-  group_type = "munki"
+  apps = [123456, 234567]
 
-  # ⚠️ DEPRECATED: install_type should be set per-app instead
-  # Valid values: "managed", "self_serve", "managed_updates", "default_installs"
-  # Only applies to munki-type groups
-  install_type = "managed"
+  # Per-app install_type overrides (Munki only)
+  # Valid values: "managed", "self_serve", "default_installs", "managed_updates"
+  apps_install_types = {
+    "123456" = "managed"
+    "234567" = "self_serve"
+  }
 
-  apps = [123456]
+  # Per-app deployment_type overrides
+  # Valid values: "standard", "munki"
+  apps_deployment_types = {
+    "123456" = "munki"
+  }
 }
 
 # Example 4: Using Deprecated Device Groups

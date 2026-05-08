@@ -29,7 +29,6 @@ type assignmentGroupsDataSourceGroupModel struct {
 	ID               types.String `tfsdk:"id"`
 	Name             types.String `tfsdk:"name"`
 	AutoDeploy       types.Bool   `tfsdk:"auto_deploy"`
-	GroupType        types.String `tfsdk:"group_type"`
 	Priority         types.Int64  `tfsdk:"priority"`
 	AppTrackLocation types.Bool   `tfsdk:"app_track_location"`
 	CreatedAt        types.String `tfsdk:"created_at"`
@@ -69,10 +68,6 @@ func (d *assignmentGroupsDataSource) Schema(_ context.Context, _ datasource.Sche
 						"auto_deploy": schema.BoolAttribute{
 							Computed:    true,
 							Description: "Whether the assignment group automatically deploys apps.",
-						},
-						"group_type": schema.StringAttribute{
-							Computed:    true,
-							Description: "The type of assignment group (standard or munki).",
 						},
 						"priority": schema.Int64Attribute{
 							Computed:    true,
@@ -148,7 +143,6 @@ func (d *assignmentGroupsDataSource) Read(ctx context.Context, req datasource.Re
 			ID:               types.StringValue(strconv.Itoa(group.ID)),
 			Name:             types.StringValue(group.Attributes.Name),
 			AutoDeploy:       types.BoolValue(group.Attributes.AutoDeploy),
-			GroupType:        types.StringValue(group.Attributes.GroupType),
 			Priority:         types.Int64Value(int64(group.Attributes.Priority)),
 			AppTrackLocation: types.BoolValue(group.Attributes.AppTrackLocation),
 			DeviceCount:      types.Int64Value(int64(group.Attributes.DeviceCount)),
@@ -267,7 +261,6 @@ type assignmentGroupData struct {
 type assignmentGroupDataAttributes struct {
 	Name             string `json:"name"`
 	AutoDeploy       bool   `json:"auto_deploy"`
-	GroupType        string `json:"group_type"`
 	Priority         int    `json:"priority"`
 	AppTrackLocation bool   `json:"app_track_location"`
 	CreatedAt        string `json:"created_at"`

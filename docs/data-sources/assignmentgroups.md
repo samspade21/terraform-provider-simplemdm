@@ -28,7 +28,7 @@ output "group_ids" {
 ```
 
 ```terraform
-# List all assignment groups and filter by type
+# List all assignment groups and filter
 data "simplemdm_assignmentgroups" "all" {}
 
 # Filter by auto-deploy enabled
@@ -36,9 +36,9 @@ output "auto_deploy_groups" {
   value = [for group in data.simplemdm_assignmentgroups.all.assignment_groups : group.name if group.auto_deploy]
 }
 
-# Filter by group type
-output "standard_groups" {
-  value = [for group in data.simplemdm_assignmentgroups.all.assignment_groups : group.name if group.group_type == "standard"]
+# Filter by app-track-location enabled
+output "location_tracking_groups" {
+  value = [for group in data.simplemdm_assignmentgroups.all.assignment_groups : group.name if group.app_track_location]
 }
 
 # Get groups sorted by priority
@@ -69,7 +69,6 @@ Read-Only:
 - `device_count` (Number) Number of devices currently assigned to the assignment group.
 - `devices` (Set of String) IDs of devices assigned directly to the assignment group.
 - `group_count` (Number) Number of device groups currently assigned to the assignment group.
-- `group_type` (String) The type of assignment group (standard or munki).
 - `groups` (Set of String) IDs of device groups assigned to the assignment group.
 - `id` (String) Assignment group identifier.
 - `name` (String) The name of the assignment group.

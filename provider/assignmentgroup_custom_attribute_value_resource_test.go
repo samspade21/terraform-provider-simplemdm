@@ -26,7 +26,6 @@ resource "simplemdm_attribute" "fixture" {
 resource "simplemdm_assignmentgroup" "fixture" {
   name        = "tf-acc-ag-cav"
   auto_deploy = false
-  group_type  = "standard"
 }
 
 resource "simplemdm_assignmentgroup_custom_attribute_value" "test" {
@@ -49,7 +48,6 @@ resource "simplemdm_attribute" "fixture" {
 resource "simplemdm_assignmentgroup" "fixture" {
   name        = "tf-acc-ag-cav"
   auto_deploy = false
-  group_type  = "standard"
 }
 
 resource "simplemdm_assignmentgroup_custom_attribute_value" "test" {

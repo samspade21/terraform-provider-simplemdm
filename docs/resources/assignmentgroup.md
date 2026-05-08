@@ -45,21 +45,24 @@ resource "simplemdm_assignmentgroup" "with_commands" {
   profiles_sync = false
 }
 
-# Example 3: Legacy Munki Group (Deprecated)
-resource "simplemdm_assignmentgroup" "legacy_munki" {
-  name = "Legacy Munki Group"
+# Example 3: Munki Per-App Overrides
+resource "simplemdm_assignmentgroup" "munki_overrides" {
+  name = "Munki Group"
 
-  # ⚠️ DEPRECATED: group_type may be ignored for New Groups Experience
-  # Valid values: "standard" or "munki", defaults to standard
-  # Changing this will destroy and recreate the group
-  group_type = "munki"
+  apps = [123456, 234567]
 
-  # ⚠️ DEPRECATED: install_type should be set per-app instead
-  # Valid values: "managed", "self_serve", "managed_updates", "default_installs"
-  # Only applies to munki-type groups
-  install_type = "managed"
+  # Per-app install_type overrides (Munki only)
+  # Valid values: "managed", "self_serve", "default_installs", "managed_updates"
+  apps_install_types = {
+    "123456" = "managed"
+    "234567" = "self_serve"
+  }
 
-  apps = [123456]
+  # Per-app deployment_type overrides
+  # Valid values: "standard", "munki"
+  apps_deployment_types = {
+    "123456" = "munki"
+  }
 }
 
 # Example 4: Using Deprecated Device Groups
@@ -110,14 +113,13 @@ resource "simplemdm_assignmentgroup" "with_device_groups" {
 
 - `app_track_location` (Boolean) Optional. Controls whether the SimpleMDM app tracks device location when installed.
 - `apps` (Set of String) Optional. Set of app IDs assigned to this assignment group. Each app is sent through POST /assignment_groups/{id}/apps/{app_id} with `deployment_type` / `install_type` taken from the matching entry in `apps_deployment_types` / `apps_install_types`, or SimpleMDM defaults if no entry exists.
-- `apps_deployment_types` (Map of String) Optional. Per-app `deployment_type` overrides keyed by app ID. Valid values: `standard`, `munki`. If unset for an app, SimpleMDM picks based on the assignment group's `group_type`.
+- `apps_deployment_types` (Map of String) Optional. Per-app `deployment_type` overrides keyed by app ID. Valid values: `standard`, `munki`. If unset for an app, SimpleMDM picks based on the assignment group's underlying type.
 - `apps_install_types` (Map of String) Optional. Per-app `install_type` overrides keyed by app ID. Only the apps you list here use a non-default install_type; apps in the `apps` set without an entry here use SimpleMDM's default (`managed`). Valid values: `managed`, `self_serve`, `default_installs`, `managed_updates`. Has no effect for non-Munki (`standard`) groups.
 - `apps_push` (Boolean) Optional. Triggers 'Push Apps' command during apply. This sends an MDM install command to all associated devices for all assigned apps, regardless of current version. Set to true when you want to reinstall or push apps. This is a one-time action on each apply where it's true. Difference from apps_update: push installs all apps.
 - `apps_update` (Boolean) Optional. Triggers 'Update Apps' command during apply. This sends an MDM install command to all associated devices for apps with available updates. Set to true when you want to push app updates. This is a one-time action on each apply where it's true. Difference from apps_push: update only installs if newer version available.
 - `auto_deploy` (Boolean) Optional. Whether the Apps should be automatically pushed to device(s) when they join this Assignment Group. Defaults to true
 - `devices` (Set of String) Optional. List of Devices assigned to this Assignment Group
 - `devices_remove_others` (Boolean) Optional. When true, devices assigned through Terraform will be removed from other assignment groups before being added to this one.
-- `group_type` (String) Optional. Type of assignment group. Must be one of standard (for MDM app/media deployments) or munki for Munki app deployments. Defaults to standard. ⚠️ DEPRECATED: This field is deprecated by the SimpleMDM API and may be ignored for accounts using the New Groups Experience.
 - `groups` (Set of String, Deprecated) Optional. List of Device Groups assigned to this Assignment Group. ⚠️ DEPRECATED: This uses a deprecated API that only works with legacy_device_group_id from previously migrated groups.
 - `priority` (Number) Optional. Sets the priority order in which assignment groups are evaluated when devices are part of multiple groups. Lower numbers are evaluated first. Valid range: 0-999. If not set, SimpleMDM assigns a default priority.
 - `profiles` (Set of String) Optional. List of Configuration Profiles (both Custom and predefined Profiles) assigned to this assignment group

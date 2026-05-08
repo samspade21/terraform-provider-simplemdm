@@ -61,7 +61,6 @@ output "group_details" {
 - `device_count` (Number) Number of devices currently assigned to the assignment group.
 - `devices` (Set of String) IDs of devices assigned directly to the assignment group.
 - `group_count` (Number) Number of device groups currently assigned to the assignment group.
-- `group_type` (String) The type of assignment group (standard or munki).
 - `groups` (Set of String) IDs of device groups assigned to the assignment group.
 - `name` (String) The name of the assignment group.
 - `priority` (Number) The priority of the assignment group.

@@ -25,7 +25,6 @@ data "simplemdm_assignmentgroup" "test" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.simplemdm_assignmentgroup.test", "id", "simplemdm_assignmentgroup.test", "id"),
 					resource.TestCheckResourceAttr("data.simplemdm_assignmentgroup.test", "name", "tf_acc_assignmentgroup_data_source"),
-					resource.TestCheckResourceAttrSet("data.simplemdm_assignmentgroup.test", "group_type"),
 				),
 			},
 		},

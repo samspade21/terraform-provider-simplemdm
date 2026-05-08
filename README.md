@@ -161,6 +161,13 @@ A few tests need a specific fixture that auto-discovery can't reliably pick:
   was deprecated by the SimpleMDM API and would force a resource replacement
   on every plan. Set `install_type` per-app via the Assign App endpoint
   instead (or via the `apps` set with the relevant deployment).
+* **`simplemdm_assignmentgroup.group_type` has been removed.** SimpleMDM
+  deprecated the `type` write parameter, and on New Groups Experience accounts
+  the response field returns `"static"` / `"dynamic"` rather than the
+  configured `"standard"` / `"munki"` — drift was guaranteed. Use per-app
+  `apps_deployment_types` (`standard`/`munki`) on the assignment group to
+  control deployment type instead. The same field has been removed from the
+  `simplemdm_assignmentgroup` and `simplemdm_assignmentgroups` data sources.
 * **`simplemdm_profile` resource never existed in this provider** — only the
   read-only `simplemdm_profile` data source. To create profiles via Terraform
   use `simplemdm_customprofile` (custom mobileconfig) or
