@@ -96,7 +96,7 @@ func TestAccCustomProfileResource(t *testing.T) {
 			// Note: Import test removed due to SimpleMDM API eventual consistency.
 			// Custom profiles take >10 seconds to propagate, making import tests
 			// unreliable in CI/CD. Import functionality can be verified manually.
-			
+
 			// Update and Read testing
 			{
 				Config: providerConfig + `

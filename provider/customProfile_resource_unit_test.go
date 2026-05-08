@@ -49,12 +49,12 @@ func TestStringValueOrNull(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := stringValueOrNull(tt.input)
-			
+
 			// Compare null states
 			if result.IsNull() != tt.expected.IsNull() {
 				t.Errorf("stringValueOrNull() null state = %v, want %v", result.IsNull(), tt.expected.IsNull())
 			}
-			
+
 			// If not null, compare values
 			if !result.IsNull() && !tt.expected.IsNull() {
 				if result.ValueString() != tt.expected.ValueString() {

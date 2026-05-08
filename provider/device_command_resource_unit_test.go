@@ -94,7 +94,7 @@ func TestValidateRequiredParameters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateRequiredParameters(tt.command, tt.params)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error but got none")
