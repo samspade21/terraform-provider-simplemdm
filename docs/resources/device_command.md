@@ -109,7 +109,7 @@ Security Commands:
   - lock: Lock device (params: message, phone_number, pin [required for macOS])
   - clear_passcode: Clear device passcode
   - wipe: Erase device (params: pin [required for macOS without T2 chip])
-  
+
 Lost Mode Commands:
   - enable_lost_mode: Enable lost mode (params: message, phone_number, footnote)
   - disable_lost_mode: Disable lost mode
