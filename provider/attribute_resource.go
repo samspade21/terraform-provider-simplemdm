@@ -145,9 +145,12 @@ func (r *attributeResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	// Overwrite items with refreshed state
+	// Overwrite items with refreshed state. SimpleMDM returns "" for unset
+	// default values, which would round-trip through state as a non-null
+	// empty string and produce perpetual drift against an Optional config
+	// that simply omits the field. Treat "" as null instead.
 	state.Name = types.StringValue(attribute.Data.Attributes.Name)
-	state.DefaultValue = types.StringValue(attribute.Data.Attributes.DefaultValue)
+	state.DefaultValue = stringValueOrNull(attribute.Data.Attributes.DefaultValue)
 	state.ID = types.StringValue(attribute.Data.Attributes.Name)
 	// Set refreshed state
 	diags = resp.State.Set(ctx, &state)

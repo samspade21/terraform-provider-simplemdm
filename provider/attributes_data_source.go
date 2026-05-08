@@ -81,7 +81,7 @@ func (d *attributesDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	for _, attr := range attributes {
 		entry := attributesDataSourceAttributeModel{
 			Name:         types.StringValue(attr.Attributes.Name),
-			DefaultValue: types.StringValue(attr.Attributes.DefaultValue),
+			DefaultValue: stringValueOrNull(attr.Attributes.DefaultValue),
 		}
 
 		entries = append(entries, entry)

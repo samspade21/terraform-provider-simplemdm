@@ -84,7 +84,7 @@ func (d *attributeDataSource) Read(ctx context.Context, req datasource.ReadReque
 	// Map response body to model
 	state.ID = types.StringValue(attribute.Data.Attributes.Name)
 	state.Name = types.StringValue(attribute.Data.Attributes.Name)
-	state.DefaultValue = types.StringValue(attribute.Data.Attributes.DefaultValue)
+	state.DefaultValue = stringValueOrNull(attribute.Data.Attributes.DefaultValue)
 
 	// Set state
 	diags = resp.State.Set(ctx, &state)

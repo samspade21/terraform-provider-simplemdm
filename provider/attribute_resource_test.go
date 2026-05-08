@@ -86,19 +86,34 @@ func TestAccAttributeResource(t *testing.T) {
 				ImportStateVerify: true,
 				//ImportStateVerifyIgnore: []string{"filesha", "mobileconfig"},
 			},
-			// Update and Read testing
+			// Update and Read testing — same name (no replacement), only
+			// default_value changes so we exercise the in-place Update path.
 			{
 				Config: providerConfig + `
 				resource "simplemdm_attribute" "testattribute" {
-					name= "newAttribute2"
-					default_value= ""
+					name= "newAttribute"
+					default_value= "updated value"
 				  }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify attributes
-					resource.TestCheckResourceAttr("simplemdm_attribute.testattribute", "name", "newAttribute2"),
-					resource.TestCheckResourceAttr("simplemdm_attribute.testattribute", "default_value", ""),
-					resource.TestCheckResourceAttr("simplemdm_attribute.testattribute", "id", "newAttribute2"),
+					resource.TestCheckResourceAttr("simplemdm_attribute.testattribute", "name", "newAttribute"),
+					resource.TestCheckResourceAttr("simplemdm_attribute.testattribute", "default_value", "updated value"),
+					resource.TestCheckResourceAttr("simplemdm_attribute.testattribute", "id", "newAttribute"),
+				),
+			},
+			// Unset default_value — verifies that omitting the Optional
+			// field round-trips as null and produces no perpetual drift
+			// against SimpleMDM's empty-string response.
+			{
+				Config: providerConfig + `
+				resource "simplemdm_attribute" "testattribute" {
+					name= "newAttribute"
+				  }
+`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("simplemdm_attribute.testattribute", "name", "newAttribute"),
+					resource.TestCheckNoResourceAttr("simplemdm_attribute.testattribute", "default_value"),
 				),
 			},
 			// Delete testing automatically occurs in TestCase
