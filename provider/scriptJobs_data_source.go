@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -323,13 +322,13 @@ func listScriptJobsWithLimit(ctx context.Context, client *simplemdm.Client, star
 		return nil, err
 	}
 
-	var response scriptJobsListResponse
-	if err := json.Unmarshal(body, &response); err != nil {
+	page, _, err := simplemdm.DecodeList[scriptJobData](body)
+	if err != nil {
 		return nil, err
 	}
 
 	var jobs []scriptJobResponse
-	for _, data := range response.Data {
+	for _, data := range page {
 		jobs = append(jobs, scriptJobResponse{Data: data})
 	}
 

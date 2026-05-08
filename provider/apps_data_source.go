@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -218,31 +217,25 @@ func fetchAllApps(ctx context.Context, client *simplemdm.Client, includeShared t
 			return nil, err
 		}
 
-		var response appsAPIResponse
-		if err := json.Unmarshal(body, &response); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[appData](body)
+		if err != nil {
 			return nil, err
 		}
 
-		allApps = append(allApps, response.Data...)
+		allApps = append(allApps, page...)
 
-		if !response.HasMore {
+		if !hasMore {
 			break
 		}
 
-		if len(response.Data) > 0 {
-			startingAfter = response.Data[len(response.Data)-1].ID
+		if len(page) > 0 {
+			startingAfter = page[len(page)-1].ID
 		} else {
 			break
 		}
 	}
 
 	return allApps, nil
-}
-
-// appsAPIResponse represents the paginated API response for apps list
-type appsAPIResponse struct {
-	Data    []appData `json:"data"`
-	HasMore bool      `json:"has_more"`
 }
 
 // appData represents a single app in the list response

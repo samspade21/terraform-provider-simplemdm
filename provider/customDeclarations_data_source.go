@@ -234,31 +234,25 @@ func fetchAllCustomDeclarations(ctx context.Context, client *simplemdm.Client, s
 			return nil, err
 		}
 
-		var response customDeclarationsAPIResponse
-		if err := json.Unmarshal(body, &response); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[customDeclarationDataList](body)
+		if err != nil {
 			return nil, err
 		}
 
-		allDeclarations = append(allDeclarations, response.Data...)
+		allDeclarations = append(allDeclarations, page...)
 
-		if !response.HasMore {
+		if !hasMore {
 			break
 		}
 
-		if len(response.Data) > 0 {
-			startingAfter = response.Data[len(response.Data)-1].idString()
+		if len(page) > 0 {
+			startingAfter = page[len(page)-1].idString()
 		} else {
 			break
 		}
 	}
 
 	return allDeclarations, nil
-}
-
-// customDeclarationsAPIResponse represents the paginated API response
-type customDeclarationsAPIResponse struct {
-	Data    []customDeclarationDataList `json:"data"`
-	HasMore bool                        `json:"has_more"`
 }
 
 // customDeclarationDataList represents a single declaration in the list response.

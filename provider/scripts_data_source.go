@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -159,31 +158,25 @@ func fetchAllScripts(ctx context.Context, client *simplemdm.Client) ([]scriptDat
 			return nil, err
 		}
 
-		var response scriptsAPIResponse
-		if err := json.Unmarshal(body, &response); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[scriptDataList](body)
+		if err != nil {
 			return nil, err
 		}
 
-		allScripts = append(allScripts, response.Data...)
+		allScripts = append(allScripts, page...)
 
-		if !response.HasMore {
+		if !hasMore {
 			break
 		}
 
-		if len(response.Data) > 0 {
-			startingAfter = response.Data[len(response.Data)-1].ID
+		if len(page) > 0 {
+			startingAfter = page[len(page)-1].ID
 		} else {
 			break
 		}
 	}
 
 	return allScripts, nil
-}
-
-// scriptsAPIResponse represents the paginated API response
-type scriptsAPIResponse struct {
-	Data    []scriptDataList `json:"data"`
-	HasMore bool             `json:"has_more"`
 }
 
 // scriptDataList represents a single script in the list response

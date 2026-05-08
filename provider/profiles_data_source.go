@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -195,31 +194,25 @@ func fetchAllProfiles(ctx context.Context, client *simplemdm.Client, search, dir
 			return nil, err
 		}
 
-		var response profilesAPIResponse
-		if err := json.Unmarshal(body, &response); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[profileDataList](body)
+		if err != nil {
 			return nil, err
 		}
 
-		allProfiles = append(allProfiles, response.Data...)
+		allProfiles = append(allProfiles, page...)
 
-		if !response.HasMore {
+		if !hasMore {
 			break
 		}
 
-		if len(response.Data) > 0 {
-			startingAfter = response.Data[len(response.Data)-1].ID
+		if len(page) > 0 {
+			startingAfter = page[len(page)-1].ID
 		} else {
 			break
 		}
 	}
 
 	return allProfiles, nil
-}
-
-// profilesAPIResponse represents the paginated API response
-type profilesAPIResponse struct {
-	Data    []profileDataList `json:"data"`
-	HasMore bool              `json:"has_more"`
 }
 
 // profileDataList represents a single profile in the list response

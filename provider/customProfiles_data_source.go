@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -194,31 +193,25 @@ func fetchAllCustomProfiles(ctx context.Context, client *simplemdm.Client, searc
 			return nil, err
 		}
 
-		var response customProfilesAPIResponse
-		if err := json.Unmarshal(body, &response); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[customProfileData](body)
+		if err != nil {
 			return nil, err
 		}
 
-		allProfiles = append(allProfiles, response.Data...)
+		allProfiles = append(allProfiles, page...)
 
-		if !response.HasMore {
+		if !hasMore {
 			break
 		}
 
-		if len(response.Data) > 0 {
-			startingAfter = response.Data[len(response.Data)-1].ID
+		if len(page) > 0 {
+			startingAfter = page[len(page)-1].ID
 		} else {
 			break
 		}
 	}
 
 	return allProfiles, nil
-}
-
-// customProfilesAPIResponse represents the paginated API response for custom profiles list
-type customProfilesAPIResponse struct {
-	Data    []customProfileData `json:"data"`
-	HasMore bool                `json:"has_more"`
 }
 
 // customProfileData represents a single custom profile in the list response

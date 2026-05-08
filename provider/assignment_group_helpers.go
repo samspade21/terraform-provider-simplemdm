@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -270,8 +271,15 @@ func setElementsToStringSlice(set types.Set) []string {
 	return result
 }
 
-// assignObjectsToGroup assigns multiple objects to an assignment group
-// Used during Create operations to assign apps, profiles, groups, or devices
+// assignObjectsToGroup assigns multiple objects to an assignment group.
+// Used during Create operations to assign apps, profiles, groups, or devices.
+//
+// SimpleMDM has a brief eventual-consistency window between when a freshly
+// created assignment group becomes addressable by ID and when its associated
+// /assignment_groups/{id}/<rel>/{otherID} endpoints start responding. The
+// first call after Create occasionally 404s for a few seconds before
+// settling. Retrying with backoff (3 attempts, ~500ms / 1s / 2s) is enough
+// to ride out the window without slowing down the happy path.
 func assignObjectsToGroup(
 	ctx context.Context,
 	client *simplemdm.Client,
@@ -292,20 +300,47 @@ func assignObjectsToGroup(
 
 		idString := objectID.(types.String).ValueString()
 
-		var err error
-		if objectType == "devices" {
-			// Devices use special assignment function with removeOthers parameter
-			err = assignmentGroupAssignDevice(ctx, client, groupID, idString, removeOthers)
-		} else {
-			// Apps, profiles, and device_groups use standard assignment
-			err = client.AssignmentGroupAssignObject(groupID, idString, objectType)
+		assign := func() error {
+			if objectType == "devices" {
+				return assignmentGroupAssignDevice(ctx, client, groupID, idString, removeOthers)
+			}
+			return client.AssignmentGroupAssignObject(groupID, idString, objectType)
 		}
 
-		if err != nil {
+		if err := retryOn404(ctx, assign); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// retryOn404 calls fn and, if it returns a 404 error, retries with
+// exponential backoff. Returns the last error if all attempts fail. Other
+// error types are returned immediately.
+//
+// Used to ride out the eventual-consistency window between Create and the
+// associated relationship endpoints becoming addressable.
+func retryOn404(ctx context.Context, fn func() error) error {
+	delays := []time.Duration{500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
+	var lastErr error
+	for attempt := 0; attempt <= len(delays); attempt++ {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("operation cancelled: %w", err)
+		}
+		lastErr = fn()
+		if lastErr == nil {
+			return nil
+		}
+		if !isNotFoundError(lastErr) || attempt == len(delays) {
+			return lastErr
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("operation cancelled: %w", ctx.Err())
+		case <-time.After(delays[attempt]):
+		}
+	}
+	return lastErr
 }
 
 // updateAssignmentGroupObjects updates assignments by computing diff and applying changes

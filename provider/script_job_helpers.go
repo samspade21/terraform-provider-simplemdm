@@ -219,11 +219,6 @@ type scriptJobFlat struct {
 	UpdatedAt           string
 }
 
-type scriptJobsListResponse struct {
-	Data    []scriptJobData `json:"data"`
-	HasMore bool            `json:"has_more"`
-}
-
 func listScriptJobs(ctx context.Context, client *simplemdm.Client, startingAfter int) ([]scriptJobResponse, error) {
 	var allJobs []scriptJobResponse
 	limit := 100
@@ -244,21 +239,21 @@ func listScriptJobs(ctx context.Context, client *simplemdm.Client, startingAfter
 			return nil, err
 		}
 
-		var response scriptJobsListResponse
-		if err := json.Unmarshal(body, &response); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[scriptJobData](body)
+		if err != nil {
 			return nil, err
 		}
 
-		for _, data := range response.Data {
+		for _, data := range page {
 			allJobs = append(allJobs, scriptJobResponse{Data: data})
 		}
 
-		if !response.HasMore {
+		if !hasMore {
 			break
 		}
 
-		if len(response.Data) > 0 {
-			startingAfter = response.Data[len(response.Data)-1].ID
+		if len(page) > 0 {
+			startingAfter = page[len(page)-1].ID
 		} else {
 			break
 		}

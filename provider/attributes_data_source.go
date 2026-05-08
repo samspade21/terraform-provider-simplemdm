@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -94,53 +93,33 @@ func (d *attributesDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	resp.Diagnostics.Append(diags...)
 }
 
-// fetchAllAttributes retrieves all custom attributes using the API with pagination support
+// fetchAllAttributes retrieves all custom attributes from the SimpleMDM API.
+//
+// The /custom_attributes endpoint is unusual: even though the API spec
+// documents an envelope response with `data` and `has_more` keys, the actual
+// server returns a bare JSON array. simplemdm.DecodeList accepts either
+// shape, which fixes the previous behaviour where the data source silently
+// returned an empty list when the tenant had attributes.
+//
+// This endpoint does not paginate (returns the full array in one call), so
+// the helper drops the loop the envelope version had.
 func fetchAllAttributes(ctx context.Context, client *simplemdm.Client) ([]attributeData, error) {
-	var allAttributes []attributeData
-	startingAfter := ""
-
-	for {
-		url := fmt.Sprintf("https://%s/api/v1/custom_attributes", client.HostName)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		// Add pagination parameter if needed
-		if startingAfter != "" {
-			q := req.URL.Query()
-			q.Add("starting_after", startingAfter)
-			req.URL.RawQuery = q.Encode()
-		}
-
-		body, err := client.RequestResponse200(req)
-		if err != nil {
-			return nil, err
-		}
-
-		var response attributesAPIResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, err
-		}
-
-		allAttributes = append(allAttributes, response.Data...)
-
-		// Check if there are more pages
-		if !response.HasMore || len(response.Data) == 0 {
-			break
-		}
-
-		// Use the last attribute's ID for pagination
-		startingAfter = response.Data[len(response.Data)-1].ID
+	url := fmt.Sprintf("https://%s/api/v1/custom_attributes", client.HostName)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
 	}
 
-	return allAttributes, nil
-}
+	body, err := client.RequestResponse200(req)
+	if err != nil {
+		return nil, err
+	}
 
-// attributesAPIResponse represents the API response for attributes list
-type attributesAPIResponse struct {
-	Data    []attributeData `json:"data"`
-	HasMore bool            `json:"has_more"`
+	items, _, err := simplemdm.DecodeList[attributeData](body)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 // attributeData represents a single attribute in the list response

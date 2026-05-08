@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -162,28 +161,28 @@ func fetchAllManagedConfigs(ctx context.Context, client *simplemdm.Client, appID
 			return nil, err
 		}
 
-		var response managedConfigListResponse
-		if err := json.Unmarshal(body, &response); err != nil {
+		page, hasMore, err := simplemdm.DecodeList[managedConfigAPIResource](body)
+		if err != nil {
 			return nil, err
 		}
 
 		// Validate type field for each item
-		for i := range response.Data {
-			if response.Data[i].Type != "" && response.Data[i].Type != "managed_config" {
-				return nil, fmt.Errorf("unexpected resource type: %s (expected managed_config)", response.Data[i].Type)
+		for i := range page {
+			if page[i].Type != "" && page[i].Type != "managed_config" {
+				return nil, fmt.Errorf("unexpected resource type: %s (expected managed_config)", page[i].Type)
 			}
 		}
 
-		allConfigs = append(allConfigs, response.Data...)
+		allConfigs = append(allConfigs, page...)
 
 		// Check if there are more results
-		if !response.HasMore {
+		if !hasMore {
 			break
 		}
 
 		// Set starting_after for next page
-		if len(response.Data) > 0 {
-			startingAfter = fmt.Sprintf("%d", response.Data[len(response.Data)-1].ID)
+		if len(page) > 0 {
+			startingAfter = fmt.Sprintf("%d", page[len(page)-1].ID)
 		} else {
 			break
 		}
