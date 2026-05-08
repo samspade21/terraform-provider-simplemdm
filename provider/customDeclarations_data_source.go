@@ -139,11 +139,11 @@ func (d *customDeclarationsDataSource) Read(ctx context.Context, req datasource.
 	entries := make([]customDeclarationsDataSourceDeclarationModel, 0, len(declarations))
 	for _, decl := range declarations {
 		entry := customDeclarationsDataSourceDeclarationModel{
-			ID:                     types.StringValue(decl.ID),
-			Name:                   types.StringValue(decl.Attributes.Name),
-			DeclarationType:        types.StringValue(decl.Attributes.DeclarationType),
-			ActivationPredicate:    stringValueOrNull(decl.Attributes.ActivationPredicate),
-			ProfileIdentifier:      stringValueOrNull(decl.Attributes.ProfileIdentifier),
+			ID:                  types.StringValue(decl.idString()),
+			Name:                types.StringValue(decl.Attributes.Name),
+			DeclarationType:     types.StringValue(decl.Attributes.DeclarationType),
+			ActivationPredicate: stringValueOrNull(decl.Attributes.ActivationPredicate),
+			ProfileIdentifier:   stringValueOrNull(decl.Attributes.ProfileIdentifier),
 		}
 
 		if decl.Attributes.UserScope != nil {
@@ -246,7 +246,7 @@ func fetchAllCustomDeclarations(ctx context.Context, client *simplemdm.Client, s
 		}
 
 		if len(response.Data) > 0 {
-			startingAfter = response.Data[len(response.Data)-1].ID
+			startingAfter = response.Data[len(response.Data)-1].idString()
 		} else {
 			break
 		}
@@ -261,9 +261,22 @@ type customDeclarationsAPIResponse struct {
 	HasMore bool                        `json:"has_more"`
 }
 
-// customDeclarationDataList represents a single declaration in the list response
+// customDeclarationDataList represents a single declaration in the list response.
+// The SimpleMDM API returns integer IDs for custom declarations even though the
+// individual declaration endpoint returns string IDs, so we accept either form
+// here and render as a string.
 type customDeclarationDataList struct {
-	ID         string                      `json:"id"`
+	ID         json.RawMessage             `json:"id"`
 	Type       string                      `json:"type"`
 	Attributes customDeclarationAttributes `json:"attributes"`
+}
+
+// idString returns the declaration ID as a string regardless of whether the
+// API serialised it as a number or a quoted string.
+func (d customDeclarationDataList) idString() string {
+	raw := string(d.ID)
+	if len(raw) >= 2 && raw[0] == '"' && raw[len(raw)-1] == '"' {
+		return raw[1 : len(raw)-1]
+	}
+	return raw
 }

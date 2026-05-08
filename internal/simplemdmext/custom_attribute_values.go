@@ -62,7 +62,8 @@ func SetDeviceCustomAttributeValues(ctx context.Context, client *simplemdm.Clien
 //	PUT /api/v1/custom_attribute_values/{ATTRIBUTE_NAME}
 //
 // with the given list of {device_id, value} assignments. The endpoint
-// responds 200 OK on success.
+// responds 202 Accepted on success (the bulk update is processed
+// asynchronously by SimpleMDM).
 func BulkSetCustomAttributeValue(ctx context.Context, client *simplemdm.Client, attributeName string, assignments []BulkAttributeAssignment) error {
 	payload, err := json.Marshal(bulkAttributePayload{Data: assignments})
 	if err != nil {
@@ -76,7 +77,7 @@ func BulkSetCustomAttributeValue(ctx context.Context, client *simplemdm.Client, 
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	if _, err := client.RequestResponse200(req); err != nil {
+	if _, err := client.RequestResponse202(req); err != nil {
 		return err
 	}
 	return nil

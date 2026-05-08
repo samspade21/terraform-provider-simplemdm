@@ -119,9 +119,11 @@ func envOrDiscover(t *testing.T, envName, hint string, fn func() (string, error)
 	return value
 }
 
-// findFirstDeviceID returns the ID of the first enrolled device in the tenant.
-// Honours SIMPLEMDM_DEVICE_ID for explicit override. Skips the test if the
-// tenant has no enrolled devices.
+// findFirstDeviceID returns the ID of the first fully-enrolled device in the
+// tenant. Honours SIMPLEMDM_DEVICE_ID for explicit override. Skips the test if
+// the tenant has no fully-enrolled devices. "awaiting_enrollment" placeholders
+// (created by simplemdm_device resource tests, etc.) are filtered out because
+// the API rejects commands and most other operations against them.
 func findFirstDeviceID(t *testing.T) string {
 	return envOrDiscover(t, "SIMPLEMDM_DEVICE_ID", "an enrolled device", func() (string, error) {
 		client, err := getTestClient()
@@ -132,10 +134,12 @@ func findFirstDeviceID(t *testing.T) string {
 		if err != nil {
 			return "", err
 		}
-		if len(devices) == 0 {
-			return "", nil
+		for _, d := range devices {
+			if status, ok := d.Attributes["status"].(string); ok && status == "enrolled" {
+				return strconv.Itoa(d.ID), nil
+			}
 		}
-		return strconv.Itoa(devices[0].ID), nil
+		return "", nil
 	})
 }
 

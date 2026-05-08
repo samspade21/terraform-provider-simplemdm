@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -11,8 +12,8 @@ import (
 	"github.com/DavidKrau/simplemdm-go-client"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -50,11 +51,12 @@ const (
 
 // deviceCommandCatalog maps command names to their API specifications
 // Command name mappings (provider name -> API endpoint):
-//   enable_bluetooth       -> bluetooth (POST)
-//   disable_bluetooth      -> bluetooth (DELETE)
-//   enable_remote_desktop  -> remote_desktop (POST)
-//   disable_remote_desktop -> remote_desktop (DELETE)
-//   rotate_filevault_recovery_key -> rotate_filevault_key
+//
+//	enable_bluetooth       -> bluetooth (POST)
+//	disable_bluetooth      -> bluetooth (DELETE)
+//	enable_remote_desktop  -> remote_desktop (POST)
+//	disable_remote_desktop -> remote_desktop (DELETE)
+//	rotate_filevault_recovery_key -> rotate_filevault_key
 var deviceCommandCatalog = map[string]deviceCommandSpec{
 	"push_assigned_apps":            {method: http.MethodPost, pathTemplate: "push_apps", expectedStatus: http.StatusAccepted},
 	"refresh":                       {method: http.MethodPost, pathTemplate: "refresh", expectedStatus: http.StatusAccepted},
@@ -130,7 +132,7 @@ Security Commands:
   - lock: Lock device (params: message, phone_number, pin [required for macOS])
   - clear_passcode: Clear device passcode
   - wipe: Erase device (params: pin [required for macOS without T2 chip])
-  
+
 Lost Mode Commands:
   - enable_lost_mode: Enable lost mode (params: message, phone_number, footnote)
   - disable_lost_mode: Disable lost mode
@@ -353,7 +355,15 @@ func (r *deviceCommandResource) buildCommandRequest(ctx context.Context, method,
 
 	bodyReader, hasBody := prepareCommandBody(method, params)
 
-	req, err := http.NewRequestWithContext(ctx, method, endpoint, bodyReader)
+	// Pass an untyped nil to http.NewRequestWithContext when there is no body.
+	// Passing a typed `(*strings.Reader)(nil)` as `io.Reader` panics inside
+	// net/http because the interface is non-nil.
+	var body io.Reader
+	if hasBody {
+		body = bodyReader
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
 		return nil, err
 	}
