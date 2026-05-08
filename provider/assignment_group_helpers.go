@@ -26,7 +26,6 @@ type assignmentGroupAttributes struct {
 	Name             string `json:"name"`
 	AutoDeploy       bool   `json:"auto_deploy"`
 	GroupType        string `json:"group_type"`
-	InstallType      string `json:"install_type"`
 	CreatedAt        string `json:"created_at"`
 	UpdatedAt        string `json:"updated_at"`
 	DeviceCount      int    `json:"device_count"`
@@ -87,7 +86,6 @@ type assignmentGroupUpsertRequest struct {
 	Name             string
 	AutoDeploy       *bool
 	GroupType        *string
-	InstallType      *string
 	Priority         *int64
 	AppTrackLocation *bool
 }
@@ -141,7 +139,6 @@ func buildAssignmentGroupQuery(payload assignmentGroupUpsertRequest, includeName
 
 	setOptionalBool(values, "auto_deploy", payload.AutoDeploy)
 	setOptionalString(values, "type", payload.GroupType)
-	setOptionalString(values, "install_type", payload.InstallType)
 
 	if payload.Priority != nil {
 		values.Set("priority", strconv.FormatInt(*payload.Priority, 10))
@@ -193,7 +190,7 @@ func applyAssignmentGroupResponseToResourceModel(model *assignment_groupResource
 
 	model.Name = types.StringValue(response.Data.Attributes.Name)
 	model.AutoDeploy = types.BoolValue(response.Data.Attributes.AutoDeploy)
-	
+
 	// Preserve existing group_type value if present (deprecated field)
 	// The API may return different values (e.g., "static") for accounts using New Groups Experience
 	// but we want to maintain the user's configured value ("standard" or "munki") to avoid drift
@@ -201,19 +198,6 @@ func applyAssignmentGroupResponseToResourceModel(model *assignment_groupResource
 		model.GroupType = types.StringValue(response.Data.Attributes.GroupType)
 	}
 	// Otherwise keep the existing model.GroupType value
-
-	// install_type is only returned by API for munki groups
-	// For standard groups, set to null since API doesn't return it
-	if response.Data.Attributes.GroupType == "munki" {
-		if response.Data.Attributes.InstallType != "" {
-			model.InstallType = types.StringValue(response.Data.Attributes.InstallType)
-		} else {
-			model.InstallType = types.StringNull()
-		}
-	} else {
-		// For standard groups, always set to null
-		model.InstallType = types.StringNull()
-	}
 
 	if response.Data.Attributes.Priority != nil {
 		model.Priority = types.Int64Value(int64(*response.Data.Attributes.Priority))
@@ -240,12 +224,6 @@ func applyAssignmentGroupResponseToDataSourceModel(model *assignmentGroupDataSou
 	model.Name = types.StringValue(response.Data.Attributes.Name)
 	model.AutoDeploy = types.BoolValue(response.Data.Attributes.AutoDeploy)
 	model.GroupType = types.StringValue(response.Data.Attributes.GroupType)
-
-	if response.Data.Attributes.GroupType == "munki" && response.Data.Attributes.InstallType != "" {
-		model.InstallType = types.StringValue(response.Data.Attributes.InstallType)
-	} else {
-		model.InstallType = types.StringNull()
-	}
 
 	if response.Data.Attributes.Priority != nil {
 		model.Priority = types.Int64Value(int64(*response.Data.Attributes.Priority))

@@ -165,66 +165,6 @@ func (d *assignmentGroupCustomAttributeValuesDataSource) Configure(_ context.Con
 }
 
 // ============================================================
-// Device group custom attribute values
-// ============================================================
-
-var (
-	_ datasource.DataSource              = &deviceGroupCustomAttributeValuesDataSource{}
-	_ datasource.DataSourceWithConfigure = &deviceGroupCustomAttributeValuesDataSource{}
-)
-
-type deviceGroupCustomAttributeValuesDataSource struct {
-	client *simplemdm.Client
-}
-
-type deviceGroupCustomAttributeValuesModel struct {
-	DeviceGroupID         types.String                `tfsdk:"device_group_id"`
-	CustomAttributeValues []customAttributeValueModel `tfsdk:"custom_attribute_values"`
-}
-
-func DeviceGroupCustomAttributeValuesDataSource() datasource.DataSource {
-	return &deviceGroupCustomAttributeValuesDataSource{}
-}
-
-func (d *deviceGroupCustomAttributeValuesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_devicegroup_custom_attribute_values"
-}
-
-func (d *deviceGroupCustomAttributeValuesDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
-	resp.Schema = schema.Schema{
-		Description: "Lists custom attribute values assigned to a (legacy) device group.",
-		Attributes: map[string]schema.Attribute{
-			"device_group_id": schema.StringAttribute{Required: true, Description: "Required. ID of the device group."},
-		},
-		Blocks: map[string]schema.Block{
-			"custom_attribute_values": schema.ListNestedBlock{
-				NestedObject: schema.NestedBlockObject{Attributes: customAttributeValueAttributesSchema()},
-			},
-		},
-	}
-}
-
-func (d *deviceGroupCustomAttributeValuesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var state deviceGroupCustomAttributeValuesModel
-	resp.Diagnostics.Append(req.Config.Get(ctx, &state)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	arr, err := d.client.AttributeGetAttributesForDeviceGroup(state.DeviceGroupID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Unable to read device group custom attribute values", err.Error())
-		return
-	}
-	state.CustomAttributeValues = mapAttributeArray(arr)
-	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
-}
-
-func (d *deviceGroupCustomAttributeValuesDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	d.client = configureDataSourceClient(req, resp)
-}
-
-// ============================================================
 // Helpers
 // ============================================================
 

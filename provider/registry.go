@@ -122,14 +122,6 @@ var resourceDefinitions = []ResourceDefinition{
 		TestsOptional: true,
 	},
 	{
-		TypeName:      "simplemdm_devicegroup",
-		Factory:       DeviceGroupResource,
-		DocsPath:      "docs/resources/devicegroup.md",
-		ExampleDirs:   []string{"examples/resources/simplemdm_devicegroup"},
-		TestsOptional: true, // Create/Delete unsupported by API; resource is read-only.
-		APIEndpoints:  []string{"/api/v1/device_groups"},
-	},
-	{
 		TypeName:    "simplemdm_enrollment",
 		Factory:     EnrollmentResource,
 		DocsPath:    "docs/resources/enrollment.md",
@@ -405,14 +397,6 @@ var dataSourceDefinitions = []DataSourceDefinition{
 		APIEndpoints: []string{"/api/v1/devices/{DEVICE_ID}/users"},
 	},
 	{
-		TypeName:     "simplemdm_devicegroup",
-		Factory:      DeviceGroupDataSource,
-		DocsPath:     "docs/data-sources/devicegroup.md",
-		ExampleDirs:  []string{"examples/data-sources/simplemdm_devicegroup"},
-		TestFiles:    []string{"provider/deviceGroup_data_source_test.go"},
-		APIEndpoints: []string{"/api/v1/device_groups"},
-	},
-	{
 		TypeName:     "simplemdm_enrollment",
 		Factory:      EnrollmentDataSource,
 		DocsPath:     "docs/data-sources/enrollment.md",
@@ -509,14 +493,6 @@ var dataSourceDefinitions = []DataSourceDefinition{
 		APIEndpoints: []string{"/api/v1/custom_declarations"},
 	},
 	{
-		TypeName:     "simplemdm_devicegroups",
-		Factory:      DeviceGroupsDataSource,
-		DocsPath:     "docs/data-sources/devicegroups.md",
-		ExampleDirs:  []string{"examples/data-sources/simplemdm_devicegroups"},
-		TestFiles:    []string{"provider/deviceGroups_data_source_test.go"},
-		APIEndpoints: []string{"/api/v1/device_groups"},
-	},
-	{
 		TypeName:     "simplemdm_enrollments",
 		Factory:      EnrollmentsDataSource,
 		DocsPath:     "docs/data-sources/enrollments.md",
@@ -563,14 +539,6 @@ var dataSourceDefinitions = []DataSourceDefinition{
 		ExampleDirs:  []string{"examples/data-sources/simplemdm_assignmentgroup_custom_attribute_values"},
 		TestFiles:    []string{"provider/assignmentgroup_custom_attribute_values_data_source_test.go"},
 		APIEndpoints: []string{"/api/v1/assignment_groups/{ASSIGNMENT_GROUP_ID}/custom_attribute_values"},
-	},
-	{
-		TypeName:     "simplemdm_devicegroup_custom_attribute_values",
-		Factory:      DeviceGroupCustomAttributeValuesDataSource,
-		DocsPath:     "docs/data-sources/devicegroup_custom_attribute_values.md",
-		ExampleDirs:  []string{"examples/data-sources/simplemdm_devicegroup_custom_attribute_values"},
-		TestFiles:    []string{"provider/devicegroup_custom_attribute_values_data_source_test.go"},
-		APIEndpoints: []string{"/api/v1/device_groups/{DEVICE_GROUP_ID}/custom_attribute_values"},
 	},
 }
 

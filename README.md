@@ -7,6 +7,11 @@ and uses the official
 [`simplemdm-go-client`](https://github.com/DavidKrau/simplemdm-go-client) to talk to
 SimpleMDM's REST API.
 
+> **Compatibility:** This provider targets the **SimpleMDM API v1.55**
+> ([api.simplemdm.com/v1](https://api.simplemdm.com/v1)). Endpoints and
+> response shapes added or changed after that version are not guaranteed to
+> work; check the API changelog if you hit unexpected behaviour.
+
 ## Installation
 
 Add the provider to your Terraform configuration. Published releases are available on
@@ -141,8 +146,29 @@ A few tests need a specific fixture that auto-discovery can't reliably pick:
 | `SIMPLEMDM_PUSH_CERT_PEM` | `simplemdm_push_certificate` resource | Only Apple can issue a real APNs PEM; there's nothing to discover. |
 | `SIMPLEMDM_PUSH_CERT_APPLE_ID` | `simplemdm_push_certificate` resource | Pairs with `SIMPLEMDM_PUSH_CERT_PEM`; the Apple ID the cert was generated under. |
 
+## Migration notes
+
+* **`simplemdm_devicegroup` resource and data sources have been removed.**
+  The SimpleMDM API marked `/device_groups` deprecated in favour of
+  `/assignment_groups`. Replace `resource "simplemdm_devicegroup" "x" { … }`
+  with `resource "simplemdm_assignmentgroup" "x" { … }` and migrate any
+  references. (`simplemdm_devicegroup` data source / `simplemdm_devicegroups`
+  list / `simplemdm_devicegroup_custom_attribute_values` were removed in the
+  same change.)
+* **`simplemdm_assignmentgroup.install_type` has been removed.** The field
+  was deprecated by the SimpleMDM API and would force a resource replacement
+  on every plan. Set `install_type` per-app via the Assign App endpoint
+  instead (or via the `apps` set with the relevant deployment).
+* **`simplemdm_profile` resource never existed in this provider** — only the
+  read-only `simplemdm_profile` data source. To create profiles via Terraform
+  use `simplemdm_customprofile` (custom mobileconfig) or
+  `simplemdm_customdeclaration` (Declarative Device Management).
+
 ## Known issues
 
-* Device groups are deprecated in SimpleMDM. The legacy `simplemdm_devicegroup` resource and data source remain for backward compatibility, but new deployments should favor `simplemdm_assignmentgroup`.
 * Device name updates require a manual PATCH request outside of Terraform.
 * Profiles and custom profiles applied to assignment groups or devices cannot be updated via API; Terraform compares the desired configuration against the previous state only.
+* The upstream `simplemdm-go-client` reads HTTP response bodies before
+  checking the status code, so on 4xx/5xx responses surfaced through it the
+  body shows as empty. Newer code paths in `internal/simplemdmext` use a
+  local `DoRequest` helper that surfaces the JSON error envelope.

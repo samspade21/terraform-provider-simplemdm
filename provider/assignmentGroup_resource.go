@@ -33,7 +33,6 @@ type assignment_groupResourceModel struct {
 	Name                types.String `tfsdk:"name"`
 	AutoDeploy          types.Bool   `tfsdk:"auto_deploy"`
 	GroupType           types.String `tfsdk:"group_type"`
-	InstallType         types.String `tfsdk:"install_type"`
 	Priority            types.Int64  `tfsdk:"priority"`
 	AppTrackLocation    types.Bool   `tfsdk:"app_track_location"`
 	ID                  types.String `tfsdk:"id"`
@@ -112,21 +111,6 @@ func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRe
 				},
 				Description: "Optional. Type of assignment group. Must be one of standard (for MDM app/media deployments) or munki for Munki app deployments. Defaults to standard. " +
 					"⚠️ DEPRECATED: This field is deprecated by the SimpleMDM API and may be ignored for accounts using the New Groups Experience.",
-			},
-			"install_type": schema.StringAttribute{
-				Optional: true,
-				Computed: true,
-				Validators: []validator.String{
-					// Validate string value must be "managed", "self_serve" or "munki"
-					stringvalidator.OneOf([]string{"managed", "self_serve", "managed_updates", "default_installs"}...),
-				},
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-					stringplanmodifier.UseStateForUnknown(),
-					&useConfigForDeprecatedGroupType{},
-				},
-				Description: "Optional. The install type for munki assignment groups. Must be one of managed, self_serve, managed_updates or default_installs. This setting has no effect for non-munki (standard) assignment groups. Defaults to managed for munki groups. " +
-					"⚠️ DEPRECATED: The SimpleMDM API recommends setting install_type per-app using the Assign App endpoint instead of at the group level.",
 			},
 			"priority": schema.Int64Attribute{
 				Optional: true,
@@ -249,13 +233,13 @@ func (m *useConfigForDeprecatedGroupType) PlanModifyString(ctx context.Context, 
 // syncProfilesWithRetry handles profile sync with rate limit retry logic
 func (r *assignment_groupResource) syncProfilesWithRetry(ctx context.Context, groupID string) error {
 	maxRetries := 3
-	
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		err := r.client.AssignmentGroupSyncProfiles(groupID)
 		if err == nil {
 			return nil
 		}
-		
+
 		// Check for rate limit (429 status or rate limit in error message)
 		if strings.Contains(err.Error(), "429") || strings.Contains(strings.ToLower(err.Error()), "rate limit") {
 			if attempt < maxRetries {
@@ -269,11 +253,11 @@ func (r *assignment_groupResource) syncProfilesWithRetry(ctx context.Context, gr
 			}
 			return fmt.Errorf("profile sync rate limited after %d attempts. Please wait 30 seconds between sync operations", maxRetries+1)
 		}
-		
+
 		// Non-rate-limit error, don't retry
 		return err
 	}
-	
+
 	return fmt.Errorf("profile sync failed after %d attempts", maxRetries+1)
 }
 
@@ -297,7 +281,6 @@ func (r *assignment_groupResource) Create(ctx context.Context, req resource.Crea
 		Name:             plan.Name.ValueString(),
 		AutoDeploy:       boolPointerFromType(plan.AutoDeploy),
 		GroupType:        stringPointerFromType(plan.GroupType),
-		InstallType:      stringPointerFromType(plan.InstallType),
 		Priority:         int64PointerFromType(plan.Priority),
 		AppTrackLocation: boolPointerFromType(plan.AppTrackLocation),
 	})
@@ -462,7 +445,6 @@ func (r *assignment_groupResource) Update(ctx context.Context, req resource.Upda
 		Name:             plan.Name.ValueString(),
 		AutoDeploy:       boolPointerFromType(plan.AutoDeploy),
 		GroupType:        stringPointerFromType(plan.GroupType),
-		InstallType:      stringPointerFromType(plan.InstallType),
 		Priority:         int64PointerFromType(plan.Priority),
 		AppTrackLocation: boolPointerFromType(plan.AppTrackLocation),
 	})

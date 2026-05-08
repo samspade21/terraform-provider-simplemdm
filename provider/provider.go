@@ -133,7 +133,12 @@ func (p *simplemdmProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	ctx = tflog.SetField(ctx, "simplemdm_host", host)
+	// SECURITY: simplemdm_apikey is set on the context so its value can be
+	// referenced (e.g. in deprecation warnings) without ever being written to
+	// the log stream. MaskFieldValuesWithFieldKeys replaces the value with
+	// "***" in any subsequent tflog.Debug / tflog.Info / tflog.Trace call.
 	ctx = tflog.SetField(ctx, "simplemdm_apikey", apikey)
+	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "simplemdm_apikey")
 
 	tflog.Debug(ctx, "Creating SimpleMDM client")
 

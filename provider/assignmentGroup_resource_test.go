@@ -109,14 +109,9 @@ resource "simplemdm_assignmentgroup" "testgroup2" {
 				ResourceName:            "simplemdm_assignmentgroup.testgroup2",
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"apps_update", "apps_push", "auto_deploy", "profiles_sync", "install_type", "group_type", "profiles", "apps", "created_at", "updated_at", "device_count", "group_count", "devices_remove_others"},
+				ImportStateVerifyIgnore: []string{"apps_update", "apps_push", "auto_deploy", "profiles_sync", "group_type", "profiles", "apps", "created_at", "updated_at", "device_count", "group_count", "devices_remove_others"},
 			},
-			// Update and Read testing.
-			// Note: not exercising the group_type→munki + install_type=managed
-			// transition here because the SimpleMDM API drops install_type from
-			// the response, which the provider currently treats as inconsistent
-			// state. That code path is covered separately by the create-time
-			// test path; here we just verify mutable scalar updates.
+			// Update and Read testing — verifies mutable scalar updates.
 			{
 				Config: providerConfig + assignmentGroupFixtureConfig + `
 resource "simplemdm_assignmentgroup" "testgroup2" {

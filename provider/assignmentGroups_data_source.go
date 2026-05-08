@@ -31,7 +31,6 @@ type assignmentGroupsDataSourceGroupModel struct {
 	Name             types.String `tfsdk:"name"`
 	AutoDeploy       types.Bool   `tfsdk:"auto_deploy"`
 	GroupType        types.String `tfsdk:"group_type"`
-	InstallType      types.String `tfsdk:"install_type"`
 	Priority         types.Int64  `tfsdk:"priority"`
 	AppTrackLocation types.Bool   `tfsdk:"app_track_location"`
 	CreatedAt        types.String `tfsdk:"created_at"`
@@ -75,10 +74,6 @@ func (d *assignmentGroupsDataSource) Schema(_ context.Context, _ datasource.Sche
 						"group_type": schema.StringAttribute{
 							Computed:    true,
 							Description: "The type of assignment group (standard or munki).",
-						},
-						"install_type": schema.StringAttribute{
-							Computed:    true,
-							Description: "Install type used when the assignment group is of type munki.",
 						},
 						"priority": schema.Int64Attribute{
 							Computed:    true,
@@ -159,13 +154,6 @@ func (d *assignmentGroupsDataSource) Read(ctx context.Context, req datasource.Re
 			AppTrackLocation: types.BoolValue(group.Attributes.AppTrackLocation),
 			DeviceCount:      types.Int64Value(int64(group.Attributes.DeviceCount)),
 			GroupCount:       types.Int64Value(int64(group.Attributes.GroupCount)),
-		}
-
-		// Set install_type if available
-		if group.Attributes.GroupType == "munki" && group.Attributes.InstallType != "" {
-			entry.InstallType = types.StringValue(group.Attributes.InstallType)
-		} else {
-			entry.InstallType = types.StringNull()
 		}
 
 		// Set timestamps if available
@@ -287,7 +275,6 @@ type assignmentGroupDataAttributes struct {
 	Name             string `json:"name"`
 	AutoDeploy       bool   `json:"auto_deploy"`
 	GroupType        string `json:"group_type"`
-	InstallType      string `json:"install_type"`
 	Priority         int    `json:"priority"`
 	AppTrackLocation bool   `json:"app_track_location"`
 	CreatedAt        string `json:"created_at"`

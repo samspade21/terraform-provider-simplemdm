@@ -96,12 +96,6 @@ var Catalog = []EndpointCoverage{
 		DocsURL:        "https://api.simplemdm.com/v1/#tag/Custom-Attributes",
 	},
 	{
-		Name:           "Device Group Custom Attribute Values",
-		Endpoint:       "/api/v1/device_groups/{DEVICE_GROUP_ID}/custom_attribute_values",
-		DataSourceType: "simplemdm_devicegroup_custom_attribute_values",
-		DocsURL:        "https://api.simplemdm.com/v1/#tag/Custom-Attributes",
-	},
-	{
 		Name:           "Custom Configuration Profiles",
 		Endpoint:       "/api/v1/custom_configuration_profiles",
 		ResourceType:   "simplemdm_customprofile",
@@ -127,13 +121,6 @@ var Catalog = []EndpointCoverage{
 		Endpoint:       "/api/v1/devices",
 		DataSourceType: "simplemdm_devices",
 		DocsURL:        "https://api.simplemdm.com/v1/#tag/Devices",
-	},
-	{
-		Name:           "Device Groups",
-		Endpoint:       "/api/v1/device_groups",
-		ResourceType:   "simplemdm_devicegroup",
-		DataSourceType: "simplemdm_devicegroup",
-		DocsURL:        "https://api.simplemdm.com/v1/#tag/Device-Groups",
 	},
 	{
 		Name:           "Enrollments",
