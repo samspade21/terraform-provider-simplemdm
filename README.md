@@ -24,7 +24,7 @@ terraform {
   required_providers {
     simplemdm = {
       source  = "DavidKrau/simplemdm"
-      version = "~> 0.1"
+      version = "~> 1.0"
     }
   }
 }
