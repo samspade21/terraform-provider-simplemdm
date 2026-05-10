@@ -402,7 +402,7 @@ func (r *assignment_groupResource) Read(ctx context.Context, req resource.ReadRe
 	profilesElements := []attr.Value{}
 
 	for _, profile := range profiles.Data {
-		for _, group := range profile.Relationships.DeviceGroups.Groups.Data {
+		for _, group := range profile.Relationships.Groups.Data {
 			if strconv.Itoa(group.ID) == state.ID.ValueString() {
 				profilesElements = append(profilesElements, types.StringValue(strconv.Itoa(profile.ID)))
 				profilesPresent = true
