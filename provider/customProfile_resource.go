@@ -167,20 +167,24 @@ func (r *customProfileResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	// Map response body to schema and populate Computed attribute values
+	// Map response body to schema and populate Computed attribute values.
+	// We keep plan.MobileConfig as the content we uploaded — no need to
+	// download it back.
 	plan.ID = types.StringValue(strconv.Itoa(Profile.Data.ID))
 	assignCustomProfileExtendedAttributes(&plan, Profile.Data.Attributes)
 
-	sha, body, err := r.client.CustomProfileSHA(plan.ID.ValueString())
+	// SimpleMDM omits profile_sha from the Create response, so compute it
+	// once via the dedicated download-and-hash endpoint. Read skips this
+	// (it uses the LIST endpoint's profile_sha field), so we only pay the
+	// cost on Create / Update.
+	sha, _, err := r.client.CustomProfileSHA(plan.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error reading SimpleMDM custom profile",
+			"Error reading SimpleMDM custom profile SHA",
 			"Could not download custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
 		)
 		return
 	}
-
-	plan.MobileConfig = types.StringValue(body)
 	plan.ProfileSHA = stringValueOrNull(sha)
 
 	// Set state to fully populated data
@@ -200,8 +204,10 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	// NOTE: GetCustomProfile uses GET /api/v1/custom_configuration_profiles/{id}
-	// This endpoint is not documented in the API specification but is functional.
+	// Capture stored values before overwriting with API metadata.
+	oldSHA := state.ProfileSHA.ValueString()
+	oldMobileConfig := state.MobileConfig.ValueString()
+
 	profile, err := simplemdmext.GetCustomProfile(ctx, r.client, state.ID.ValueString())
 	if err != nil {
 		if isNotFoundError(err) {
@@ -219,24 +225,15 @@ func (r *customProfileResource) Read(ctx context.Context, req resource.ReadReque
 	assignCustomProfileExtendedAttributes(&state, profile.Data.Attributes)
 	state.ID = types.StringValue(strconv.Itoa(profile.Data.ID))
 
-	// NOTE: CustomProfileSHA downloads the profile using GET /api/v1/custom_configuration_profiles/{id}/download
-	// and computes the SHA-256 checksum locally. The 'profile_sha' field is not returned by the API.
-	sha, body, err := r.client.CustomProfileSHA(state.ID.ValueString())
-	if err != nil {
-		if isNotFoundError(err) {
-			resp.State.RemoveResource(ctx)
-			return
-		}
-
-		resp.Diagnostics.AddError(
-			"Error reading SimpleMDM custom profile",
-			"Could not download custom profile ID "+state.ID.ValueString()+": "+err.Error(),
-		)
-		return
+	// Detect drift using profile_sha from the API (no download needed).
+	// If the SHA changed, clear mobileconfig so TF sees a diff and re-uploads.
+	// If SHA is unchanged (or not returned), keep the stored mobileconfig content.
+	apiSHA := profile.Data.Attributes.ProfileSHA
+	if apiSHA != "" && oldSHA != "" && apiSHA != oldSHA {
+		state.MobileConfig = types.StringValue("")
+	} else {
+		state.MobileConfig = types.StringValue(oldMobileConfig)
 	}
-
-	state.MobileConfig = types.StringValue(body)
-	state.ProfileSHA = stringValueOrNull(sha)
 
 	// Set refreshed state
 	diags = resp.State.Set(ctx, &state)
@@ -277,23 +274,22 @@ func (r *customProfileResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
+	// Keep plan.MobileConfig as the content we uploaded — no download needed.
 	assignCustomProfileExtendedAttributes(&plan, profile.Data.Attributes)
 
-	sha, body, err := r.client.CustomProfileSHA(plan.ID.ValueString())
+	// Refresh profile_sha: SimpleMDM omits it from the Update response.
+	sha, _, err := r.client.CustomProfileSHA(plan.ID.ValueString())
 	if err != nil {
 		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
-
 		resp.Diagnostics.AddError(
-			"Error reading SimpleMDM custom profile",
+			"Error reading SimpleMDM custom profile SHA",
 			"Could not download custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
 		)
 		return
 	}
-
-	plan.MobileConfig = types.StringValue(body)
 	plan.ProfileSHA = stringValueOrNull(sha)
 
 	diags = resp.State.Set(ctx, plan)
@@ -334,9 +330,7 @@ func assignCustomProfileExtendedAttributes(model *customProfileResourceModel, at
 	model.ProfileIdentifier = stringValueOrNull(attributes.ProfileIdentifier)
 	model.GroupCount = types.Int64Value(int64(attributes.GroupCount))
 	model.DeviceCount = types.Int64Value(int64(attributes.DeviceCount))
-	if attributes.ProfileSHA != "" {
-		model.ProfileSHA = types.StringValue(attributes.ProfileSHA)
-	}
+	model.ProfileSHA = stringValueOrNull(attributes.ProfileSHA)
 }
 
 func stringValueOrNull(value string) types.String {

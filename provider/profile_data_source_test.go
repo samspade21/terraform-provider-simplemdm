@@ -26,9 +26,6 @@ data "simplemdm_profile" "test" {
   id = simplemdm_customprofile.test.id
 }
 `,
-				// SimpleMDM exhibits eventual consistency on custom profile reads
-				// shortly after creation; allow the refresh plan to differ.
-				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrPair("data.simplemdm_profile.test", "id", "simplemdm_customprofile.test", "id"),
 					resource.TestCheckResourceAttrSet("data.simplemdm_profile.test", "name"),

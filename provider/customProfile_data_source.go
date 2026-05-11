@@ -111,8 +111,6 @@ func (d *customProfileDataSource) Read(ctx context.Context, req datasource.ReadR
 	diags := req.Config.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
-	// NOTE: GetCustomProfile uses GET /api/v1/custom_configuration_profiles/{id}
-	// This endpoint is not documented in the API specification but is functional.
 	profile, err := simplemdmext.GetCustomProfile(ctx, d.client, state.ID.ValueString())
 	if err != nil {
 		if isNotFoundError(err) {

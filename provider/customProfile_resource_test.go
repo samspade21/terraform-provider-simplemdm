@@ -76,7 +76,6 @@ func TestAccCustomProfileResource(t *testing.T) {
 
 		  }
 `,
-				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify attributes
 					resource.TestCheckResourceAttr("simplemdm_customprofile.test", "name", "testprofile"),
@@ -110,7 +109,6 @@ resource "simplemdm_customprofile" "test" {
 
 				  }
 `,
-				ExpectNonEmptyPlan: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					// Verify attributes
 					resource.TestCheckResourceAttr("simplemdm_customprofile.test", "name", "testprofile2"),

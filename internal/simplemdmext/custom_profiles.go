@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
@@ -37,6 +38,16 @@ type CustomProfileExtendedResponse struct {
 		ID         int                             `json:"id"`
 		Attributes CustomProfileExtendedAttributes `json:"attributes"`
 	} `json:"data"`
+}
+
+// customProfileListResponse mirrors the paged LIST endpoint response.
+type customProfileListResponse struct {
+	Data []struct {
+		Type       string                          `json:"type"`
+		ID         int                             `json:"id"`
+		Attributes CustomProfileExtendedAttributes `json:"attributes"`
+	} `json:"data"`
+	HasMore bool `json:"has_more"`
 }
 
 // CustomProfileCreatePayload represents the writable fields for create/update.
@@ -96,21 +107,51 @@ func UpdateCustomProfile(ctx context.Context, client *simplemdm.Client, profileI
 	return decodeCustomProfileResponse(respBody)
 }
 
-// GetCustomProfile fetches a custom configuration profile, including the
-// declarative flag.
+// GetCustomProfile fetches a custom configuration profile by ID, including the
+// declarative flag. The SimpleMDM API does not expose a GET-by-ID endpoint for
+// custom configuration profiles, so this pages through the LIST endpoint and
+// returns the matching record. Returns an error containing "not found" when
+// the profile is absent so callers can detect 404-equivalent results.
 func GetCustomProfile(ctx context.Context, client *simplemdm.Client, profileID string) (*CustomProfileExtendedResponse, error) {
-	url := fmt.Sprintf("https://%s/api/v1/custom_configuration_profiles/%s", client.HostName, profileID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	targetID, err := strconv.Atoi(profileID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid custom profile ID %q: %w", profileID, err)
 	}
 
-	respBody, err := client.RequestResponse200(req)
-	if err != nil {
-		return nil, err
-	}
+	startingAfter := 0
+	for {
+		url := fmt.Sprintf("https://%s/api/v1/custom_configuration_profiles/?limit=100&starting_after=%d", client.HostName, startingAfter)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
 
-	return decodeCustomProfileResponse(respBody)
+		respBody, err := client.RequestResponse200(req)
+		if err != nil {
+			return nil, err
+		}
+
+		var page customProfileListResponse
+		if err := json.Unmarshal(respBody, &page); err != nil {
+			return nil, fmt.Errorf("failed to decode custom configuration profile list response: %w", err)
+		}
+
+		for _, item := range page.Data {
+			if item.ID == targetID {
+				resp := &CustomProfileExtendedResponse{}
+				resp.Data.Type = item.Type
+				resp.Data.ID = item.ID
+				resp.Data.Attributes = item.Attributes
+				return resp, nil
+			}
+		}
+
+		if !page.HasMore || len(page.Data) == 0 {
+			return nil, fmt.Errorf("custom configuration profile %s not found", profileID)
+		}
+
+		startingAfter = page.Data[len(page.Data)-1].ID
+	}
 }
 
 func buildCustomProfileMultipart(payload CustomProfileCreatePayload) (*bytes.Buffer, string, error) {
