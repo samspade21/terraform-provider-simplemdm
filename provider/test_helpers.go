@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
@@ -61,8 +62,13 @@ func getTestClient() (*simplemdm.Client, error) {
 	return simplemdm.NewClient(host, apiKey), nil
 }
 
-// testAccCheckDestroy is a helper to verify resource destruction
-// It takes a resource type name and a function to check if the resource exists
+// testAccCheckDestroy is a helper to verify resource destruction.
+//
+// SimpleMDM's DELETE endpoints return 204 immediately but the underlying
+// record can stay readable through GET for a few seconds — particularly
+// for devices, where the destroy check often sees the resource still
+// present even though the delete succeeded. Retry up to 3 times with a
+// 2s gap to absorb that window.
 func testAccCheckResourceDestroyed(resourceType string, checkExists func(*simplemdm.Client, string) error) func(*terraform.State) error {
 	return func(s *terraform.State) error {
 		client, err := getTestClient()
@@ -75,13 +81,22 @@ func testAccCheckResourceDestroyed(resourceType string, checkExists func(*simple
 				continue
 			}
 
-			err := checkExists(client, rs.Primary.ID)
-			if err == nil {
-				return fmt.Errorf("%s %s still exists after destroy", resourceType, rs.Primary.ID)
+			var lastErr error
+			for attempt := 0; attempt < 3; attempt++ {
+				lastErr = checkExists(client, rs.Primary.ID)
+				if lastErr != nil && isNotFoundError(lastErr) {
+					break
+				}
+				if attempt < 2 {
+					time.Sleep(2 * time.Second)
+				}
 			}
 
-			if !isNotFoundError(err) {
-				return fmt.Errorf("unexpected error checking %s %s: %w", resourceType, rs.Primary.ID, err)
+			if lastErr == nil {
+				return fmt.Errorf("%s %s still exists after destroy", resourceType, rs.Primary.ID)
+			}
+			if !isNotFoundError(lastErr) {
+				return fmt.Errorf("unexpected error checking %s %s: %w", resourceType, rs.Primary.ID, lastErr)
 			}
 		}
 
