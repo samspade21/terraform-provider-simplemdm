@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -274,6 +276,35 @@ func (r *scriptJobResource) Create(ctx context.Context, req resource.CreateReque
 		customAttributeRegex,
 	)
 	if err != nil {
+		// SimpleMDM returns 422 "No enrolled macOS devices were found" when the
+		// target group has no enrolled devices. Write a sentinel state so TF
+		// considers the resource handled; Read will remove it on the next refresh
+		// (404), causing the next plan to retry the create.
+		if strings.Contains(err.Error(), "No enrolled macOS devices were found") {
+			resp.Diagnostics.AddWarning(
+				"Script job skipped — no enrolled devices",
+				"SimpleMDM could not create the script job because the target assignment group has no enrolled macOS devices. The job will be retried on the next apply.",
+			)
+			emptyDevices, d := types.ListValue(types.ObjectType{AttrTypes: scriptJobDeviceAttrTypes}, []attr.Value{})
+			resp.Diagnostics.Append(d...)
+			plan.ID = types.StringValue("no-enrolled-devices")
+			plan.JobName = types.StringNull()
+			plan.JobIdentifier = types.StringNull()
+			plan.Status = types.StringNull()
+			plan.PendingCount = types.Int64Value(0)
+			plan.SuccessCount = types.Int64Value(0)
+			plan.ErroredCount = types.Int64Value(0)
+			plan.ScriptName = types.StringNull()
+			plan.CreatedAt = types.StringNull()
+			plan.UpdatedAt = types.StringNull()
+			plan.CreatedBy = types.StringNull()
+			plan.VariableSupport = types.BoolValue(false)
+			plan.Content = types.StringNull()
+			plan.Devices = emptyDevices
+			diags = resp.State.Set(ctx, plan)
+			resp.Diagnostics.Append(diags...)
+			return
+		}
 		// SimpleMDM rejects script_job create with a generic 422 when the
 		// targets don't include any actually-enrolled macOS devices.
 		// scriptJobErrorHint inspects the tenant only when the underlying
