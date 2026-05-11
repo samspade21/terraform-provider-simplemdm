@@ -63,7 +63,7 @@ output "enterprise_processing_status" {
 ### Optional
 
 - `app_store_id` (String) The Apple App Store ID. Required when adding App Store apps via store ID. Use either this, bundle_id, or binary_file. Example: '1090161858'
-- `binary_file` (String) Path to app binary (ipa or pkg) to upload. Required when managing enterprise, custom B2B, or macOS package apps. Use either this, app_store_id, or bundle_id.
+- `binary_file` (String) Path to app binary (ipa, pkg, or dmg) to upload. Required when managing enterprise, custom B2B, or macOS package/disk-image apps. Use either this, app_store_id, or bundle_id. Renames of the binary file with unchanged content do not trigger a re-upload — drift is tracked by sha256, surfaced as binary_file_sha256.
 - `bundle_id` (String) The bundle identifier of the Apple App Store app. Required when adding App Store apps via bundle ID. Use either this, app_store_id, or binary_file. Example: com.myCompany.MyApp1
 - `deploy_to` (String) Deploy the app after upload. Values: 'none' (default), 'outdated' (devices with older version), 'all' (all devices). Note: Only applies during updates; create operations require subsequent update. API does not return this value, so state shows last configured value.
 - `name` (String) The name for this app in SimpleMDM. For App Store apps, this is computed from the store. For binary uploads, you may optionally specify a name, otherwise it's extracted from the binary.
@@ -71,6 +71,7 @@ output "enterprise_processing_status" {
 ### Read-Only
 
 - `app_type` (String) The catalog classification of the app, for example app store, enterprise, or custom b2b.
+- `binary_file_sha256` (String) SHA-256 of the most recently uploaded binary. Used to detect content drift independent of the local file path.
 - `created_at` (String) Timestamp when the app was added to SimpleMDM.
 - `id` (String) The ID of this resource.
 - `installation_channels` (List of String) The deployment channels supported by the app.
