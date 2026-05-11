@@ -55,7 +55,7 @@ type customDeclarationAttributes struct {
 
 type customDeclarationResponse struct {
 	Data struct {
-		ID         string                      `json:"id"`
+		ID         json.Number                 `json:"id"`
 		Attributes customDeclarationAttributes `json:"attributes"`
 	} `json:"data"`
 }
@@ -104,7 +104,7 @@ func (r *customDeclarationResource) Schema(_ context.Context, _ resource.SchemaR
 			},
 			"payload": schema.StringAttribute{
 				Required:    true,
-				Description: "The JSON payload for the declaration.",
+				Description: "The JSON payload for the declaration. Stored verbatim; semantically-equal JSON with different whitespace or key order will register as drift.",
 			},
 			"user_scope": schema.BoolAttribute{
 				Optional:    true,
@@ -249,19 +249,14 @@ func (r *customDeclarationResource) Create(ctx context.Context, req resource.Cre
 	}
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
 
-	// API may return 200 or 201 on success
-	responseBody, err := r.client.RequestResponse200(httpReq)
+	// SimpleMDM returns 201 Created. The previous 200-then-fallback-to-201
+	// pattern re-posted the request with an already-consumed body buffer,
+	// which caused a 400 response after the original POST had already
+	// successfully created a record server-side (orphans on every apply).
+	responseBody, err := r.client.RequestResponse201(httpReq)
 	if err != nil {
-		// Try 201 if 200 failed
-		if strings.Contains(err.Error(), "200") {
-			httpReq2, _ := http.NewRequest(http.MethodPost, url, &body)
-			httpReq2.Header.Set("Content-Type", writer.FormDataContentType())
-			responseBody, err = r.client.RequestResponse201(httpReq2)
-		}
-		if err != nil {
-			resp.Diagnostics.AddError("Error creating SimpleMDM custom declaration", err.Error())
-			return
-		}
+		resp.Diagnostics.AddError("Error creating SimpleMDM custom declaration", err.Error())
+		return
 	}
 
 	var declaration customDeclarationResponse
@@ -270,16 +265,21 @@ func (r *customDeclarationResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 
-	if len(declaration.Data.Attributes.Payload) == 0 {
-		raw, err := downloadCustomDeclarationPayload(ctx, r.client, declaration.Data.ID)
-		if err != nil {
-			resp.Diagnostics.AddError("Error downloading SimpleMDM custom declaration payload", err.Error())
-			return
-		}
-
-		declaration.Data.Attributes.Payload = raw
+	declarationID := declaration.Data.ID.String()
+	if declarationID == "" {
+		resp.Diagnostics.AddError(
+			"Error creating SimpleMDM custom declaration",
+			"Response from SimpleMDM did not include an id field",
+		)
+		return
 	}
 
+	// SimpleMDM's create response omits payload, declaration_type, and
+	// activation_predicate — those come from the plan. refreshFromResponse
+	// preserves the plan's values for any field the API omits. The user-
+	// supplied payload string is preserved verbatim — normalising it would
+	// fail "Provider produced inconsistent result after apply" because
+	// Required attributes can't be modified vs the configured value.
 	if diags := plan.refreshFromResponse(ctx, &declaration); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
@@ -297,40 +297,45 @@ func (r *customDeclarationResource) Read(ctx context.Context, req resource.ReadR
 		return
 	}
 
-	url := fmt.Sprintf("https://%s/api/v1/custom_declarations/%s", r.client.HostName, state.ID.ValueString())
-	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+	declarationID := state.ID.ValueString()
+
+	// SimpleMDM does not expose GET /custom_declarations/{id}; list+filter is
+	// the only way to read a single declaration's metadata.
+	item, err := findCustomDeclarationByID(ctx, r.client, declarationID)
 	if err != nil {
-		resp.Diagnostics.AddError("Error creating SimpleMDM custom declaration request", err.Error())
+		resp.Diagnostics.AddError("Error reading SimpleMDM custom declaration", err.Error())
+		return
+	}
+	if item == nil {
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	responseBody, err := r.client.RequestResponse200(httpReq)
+	// /download gives us Type (declaration_type) and the assembled payload.
+	rawEnvelope, err := downloadCustomDeclarationPayload(ctx, r.client, declarationID)
 	if err != nil {
 		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
-
-		resp.Diagnostics.AddError("Error reading SimpleMDM custom declaration", err.Error())
+		resp.Diagnostics.AddError("Error downloading SimpleMDM custom declaration payload", err.Error())
 		return
 	}
 
-	var declaration customDeclarationResponse
-	if err := json.Unmarshal(responseBody, &declaration); err != nil {
-		resp.Diagnostics.AddError("Error parsing SimpleMDM custom declaration response", err.Error())
-		return
+	declType, _, _ := parseDeclarationEnvelope(rawEnvelope)
+
+	declaration := customDeclarationResponse{}
+	declaration.Data.ID = json.Number(declarationID)
+	declaration.Data.Attributes = item.Attributes
+	if declType != "" {
+		declaration.Data.Attributes.DeclarationType = declType
 	}
+	// Don't pass attributes.Payload — refreshFromResponse would normalise it
+	// and that fights the user's verbatim-store schema. We preserve the
+	// previous state value below.
 
-	if len(declaration.Data.Attributes.Payload) == 0 {
-		raw, err := downloadCustomDeclarationPayload(ctx, r.client, state.ID.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError("Error downloading SimpleMDM custom declaration payload", err.Error())
-			return
-		}
-
-		declaration.Data.Attributes.Payload = raw
-	}
-
+	// refreshFromResponse leaves Payload alone when attributes.Payload is
+	// empty, so the verbatim value from prior state is preserved.
 	if diags := state.refreshFromResponse(ctx, &declaration); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
@@ -433,6 +438,10 @@ func (r *customDeclarationResource) Update(ctx context.Context, req resource.Upd
 
 	responseBody, err := r.client.RequestResponse200(httpReq)
 	if err != nil {
+		if isNotFoundError(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Error updating SimpleMDM custom declaration", err.Error())
 		return
 	}
@@ -443,16 +452,9 @@ func (r *customDeclarationResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 
-	if len(declaration.Data.Attributes.Payload) == 0 {
-		raw, err := downloadCustomDeclarationPayload(ctx, r.client, plan.ID.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError("Error downloading SimpleMDM custom declaration payload", err.Error())
-			return
-		}
-
-		declaration.Data.Attributes.Payload = raw
-	}
-
+	// The PATCH response is the list-shape record (no payload, no
+	// declaration_type, no activation_predicate); refreshFromResponse
+	// preserves the planned values for fields the API omits.
 	if diags := plan.refreshFromResponse(ctx, &declaration); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
@@ -548,43 +550,41 @@ func buildCustomDeclarationPayload(ctx context.Context, model *customDeclaration
 	return payload, diags
 }
 
+// refreshFromResponse maps API attributes onto the resource model. Fields the
+// API never returns (declaration_type, activation_predicate, payload) are left
+// alone when the response is empty — callers are responsible for populating
+// them from the plan/state before persisting.
 func (m *customDeclarationResourceModel) refreshFromResponse(ctx context.Context, response *customDeclarationResponse) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	attributes := response.Data.Attributes
 
-	m.ID = types.StringValue(response.Data.ID)
-	m.Name = types.StringValue(attributes.Name)
-	m.DeclarationType = types.StringValue(attributes.DeclarationType)
+	m.ID = types.StringValue(response.Data.ID.String())
+	if attributes.Name != "" {
+		m.Name = types.StringValue(attributes.Name)
+	}
+	if attributes.DeclarationType != "" {
+		m.DeclarationType = types.StringValue(attributes.DeclarationType)
+	}
 
 	if attributes.UserScope != nil {
 		m.UserScope = types.BoolValue(*attributes.UserScope)
-	} else {
-		m.UserScope = types.BoolNull()
 	}
 
 	if attributes.AttributeSupport != nil {
 		m.AttributeSupport = types.BoolValue(*attributes.AttributeSupport)
-	} else {
-		m.AttributeSupport = types.BoolNull()
 	}
 
 	if attributes.EscapeAttributes != nil {
 		m.EscapeAttributes = types.BoolValue(*attributes.EscapeAttributes)
-	} else {
-		m.EscapeAttributes = types.BoolNull()
 	}
 
 	if attributes.ActivationPredicate != "" {
 		m.ActivationPredicate = types.StringValue(attributes.ActivationPredicate)
-	} else {
-		m.ActivationPredicate = types.StringNull()
 	}
 
 	if attributes.ReinstallAfterOsUpdate != nil {
 		m.ReinstallAfterOsUpdate = types.BoolValue(*attributes.ReinstallAfterOsUpdate)
-	} else {
-		m.ReinstallAfterOsUpdate = types.BoolNull()
 	}
 
 	if attributes.ProfileIdentifier != "" {
@@ -606,15 +606,7 @@ func (m *customDeclarationResourceModel) refreshFromResponse(ctx context.Context
 	}
 
 	if len(attributes.Payload) > 0 {
-		normalized, err := normalizeJSON(string(attributes.Payload), "payload", m.ID.ValueString())
-		if err != nil {
-			diags.AddError("Invalid JSON payload", fmt.Sprintf("Unable to normalize declaration payload: %s", err))
-			return diags
-		}
-
-		m.Payload = types.StringValue(normalized)
-	} else {
-		m.Payload = types.StringNull()
+		m.Payload = types.StringValue(string(attributes.Payload))
 	}
 
 	return diags
@@ -638,6 +630,96 @@ func downloadCustomDeclarationPayload(ctx context.Context, client *simplemdm.Cli
 	}
 
 	return json.RawMessage(trimmed), nil
+}
+
+// parseDeclarationEnvelope extracts the user-meaningful fields from a
+// /custom_declarations/{id}/download response, which is the assembled DDM
+// envelope:
+//
+//	{"Type":"…","Identifier":"…","ServerToken":"…","Payload":{<user fields>+
+//	 "declaration_name":"…","activation_predicate":null|"…"}}
+//
+// Returns (declaration_type, activation_predicate, raw user payload with the
+// SimpleMDM-injected declaration_name and activation_predicate keys stripped).
+// All three return values are best-effort — callers should treat empty values
+// as "unknown" and fall back to plan / state.
+func parseDeclarationEnvelope(raw json.RawMessage) (string, string, json.RawMessage) {
+	if len(raw) == 0 {
+		return "", "", nil
+	}
+
+	var envelope struct {
+		Type    string          `json:"Type"`
+		Payload json.RawMessage `json:"Payload"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return "", "", nil
+	}
+
+	if len(envelope.Payload) == 0 {
+		return envelope.Type, "", nil
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
+	decoder.UseNumber()
+	var asMap map[string]json.RawMessage
+	if err := decoder.Decode(&asMap); err != nil {
+		return envelope.Type, "", envelope.Payload
+	}
+
+	var activationPredicate string
+	if v, ok := asMap["activation_predicate"]; ok {
+		// Pull the value out, then strip; ignore nulls.
+		if !bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
+			_ = json.Unmarshal(v, &activationPredicate)
+		}
+		delete(asMap, "activation_predicate")
+	}
+	delete(asMap, "declaration_name")
+
+	cleaned, err := json.Marshal(asMap)
+	if err != nil {
+		return envelope.Type, activationPredicate, envelope.Payload
+	}
+	return envelope.Type, activationPredicate, cleaned
+}
+
+// findCustomDeclarationByID pages through /api/v1/custom_declarations looking
+// for the given id. Returns (nil, nil) when the declaration cannot be found —
+// callers should treat that as "resource gone, drop from state".
+//
+// SimpleMDM does not support GET /custom_declarations/{id}; the only way to
+// read a single declaration's attributes is to filter the list.
+func findCustomDeclarationByID(ctx context.Context, client *simplemdm.Client, declarationID string) (*customDeclarationDataList, error) {
+	startingAfter := ""
+	limit := 100
+	for {
+		url := fmt.Sprintf("https://%s/api/v1/custom_declarations?limit=%d", client.HostName, limit)
+		if startingAfter != "" {
+			url += fmt.Sprintf("&starting_after=%s", startingAfter)
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return nil, err
+		}
+		body, err := client.RequestResponse200(req)
+		if err != nil {
+			return nil, err
+		}
+		page, hasMore, err := simplemdm.DecodeList[customDeclarationDataList](body)
+		if err != nil {
+			return nil, err
+		}
+		for i := range page {
+			if page[i].idString() == declarationID {
+				return &page[i], nil
+			}
+		}
+		if !hasMore || len(page) == 0 {
+			return nil, nil
+		}
+		startingAfter = page[len(page)-1].idString()
+	}
 }
 
 func normalizeJSON(input string, fieldName string, declarationID string) (string, error) {

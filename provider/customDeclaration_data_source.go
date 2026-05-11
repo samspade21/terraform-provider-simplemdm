@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -114,38 +113,41 @@ func (d *customDeclarationDataSource) Read(ctx context.Context, req datasource.R
 		return
 	}
 
-	url := fmt.Sprintf("https://%s/api/v1/custom_declarations/%s", d.client.HostName, state.ID.ValueString())
-	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		resp.Diagnostics.AddError("Error creating SimpleMDM custom declaration request", err.Error())
-		return
-	}
+	declarationID := state.ID.ValueString()
 
-	responseBody, err := d.client.RequestResponse200(httpReq)
+	// SimpleMDM does not expose GET /custom_declarations/{id}; list+filter is
+	// the only way to read a single declaration's metadata.
+	item, err := findCustomDeclarationByID(ctx, d.client, declarationID)
 	if err != nil {
-		if isNotFoundError(err) {
-			resp.Diagnostics.AddError("Custom declaration not found", err.Error())
-			return
-		}
-
 		resp.Diagnostics.AddError("Error reading SimpleMDM custom declaration", err.Error())
 		return
 	}
-
-	var declaration customDeclarationResponse
-	if err := json.Unmarshal(responseBody, &declaration); err != nil {
-		resp.Diagnostics.AddError("Error parsing SimpleMDM custom declaration response", err.Error())
+	if item == nil {
+		resp.Diagnostics.AddError("Custom declaration not found", fmt.Sprintf("No custom declaration with id %q found in SimpleMDM", declarationID))
 		return
 	}
 
-	if len(declaration.Data.Attributes.Payload) == 0 {
-		raw, err := downloadCustomDeclarationPayload(ctx, d.client, state.ID.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError("Error downloading SimpleMDM custom declaration payload", err.Error())
-			return
-		}
+	// /download gives us declaration_type (top-level Type) and the assembled
+	// payload (with SimpleMDM-injected declaration_name / activation_predicate
+	// keys stripped by parseDeclarationEnvelope).
+	rawEnvelope, err := downloadCustomDeclarationPayload(ctx, d.client, declarationID)
+	if err != nil {
+		resp.Diagnostics.AddError("Error downloading SimpleMDM custom declaration payload", err.Error())
+		return
+	}
+	declType, activationPredicate, cleanedPayload := parseDeclarationEnvelope(rawEnvelope)
 
-		declaration.Data.Attributes.Payload = raw
+	declaration := customDeclarationResponse{}
+	declaration.Data.ID = json.Number(declarationID)
+	declaration.Data.Attributes = item.Attributes
+	if declType != "" {
+		declaration.Data.Attributes.DeclarationType = declType
+	}
+	if activationPredicate != "" && declaration.Data.Attributes.ActivationPredicate == "" {
+		declaration.Data.Attributes.ActivationPredicate = activationPredicate
+	}
+	if len(cleanedPayload) > 0 {
+		declaration.Data.Attributes.Payload = cleanedPayload
 	}
 
 	var model customDeclarationResourceModel
