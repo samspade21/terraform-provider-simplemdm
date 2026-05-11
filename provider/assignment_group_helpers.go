@@ -69,7 +69,79 @@ func fetchAssignmentGroup(ctx context.Context, client *simplemdm.Client, id stri
 		return nil, err
 	}
 
+	// SimpleMDM omits profile relationships from the assignment group GET
+	// response. Recover them by listing custom configuration profiles and
+	// filtering by the inverse `groups` relationship.
+	profileIDs, err := fetchAssignmentGroupProfileIDs(ctx, client, assignmentGroup.Data.ID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching profiles assigned to group %s: %w", id, err)
+	}
+	assignmentGroup.Data.Relationships.Profiles.Data = make([]assignmentGroupRelationshipItem, 0, len(profileIDs))
+	for _, pid := range profileIDs {
+		// Type is unused by callers — they only need the ID. Setting "profile"
+		// generically since the inverse lookup spans all profile types.
+		assignmentGroup.Data.Relationships.Profiles.Data = append(assignmentGroup.Data.Relationships.Profiles.Data, assignmentGroupRelationshipItem{
+			ID:   pid,
+			Type: "profile",
+		})
+	}
+
 	return &assignmentGroup, nil
+}
+
+// fetchAssignmentGroupProfileIDs returns the IDs of profiles (any type:
+// custom configuration, vendor settings like apple_intelligence_settings,
+// passcode_policy, restrictions, etc.) attached to the given assignment
+// group. The SimpleMDM API does not expose this on the assignment group
+// GET response, so we page through /profiles and inspect each profile's
+// `groups` relationship. Using /profiles rather than the narrower
+// /custom_configuration_profiles ensures UI-managed types show up.
+func fetchAssignmentGroupProfileIDs(ctx context.Context, client *simplemdm.Client, groupID int) ([]int, error) {
+	type profileGroupRef struct {
+		ID int `json:"id"`
+	}
+	type profileListItem struct {
+		ID            int `json:"id"`
+		Relationships struct {
+			Groups struct {
+				Data []profileGroupRef `json:"data"`
+			} `json:"groups"`
+		} `json:"relationships"`
+	}
+	type profileListPage struct {
+		Data    []profileListItem `json:"data"`
+		HasMore bool              `json:"has_more"`
+	}
+
+	var ids []int
+	startingAfter := 0
+	for {
+		listURL := fmt.Sprintf("https://%s/api/v1/profiles/?limit=100&starting_after=%d", client.HostName, startingAfter)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, listURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		body, err := client.RequestResponse200(req)
+		if err != nil {
+			return nil, err
+		}
+		var page profileListPage
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, fmt.Errorf("decode profile list page: %w", err)
+		}
+		for _, item := range page.Data {
+			for _, g := range item.Relationships.Groups.Data {
+				if g.ID == groupID {
+					ids = append(ids, item.ID)
+					break
+				}
+			}
+		}
+		if !page.HasMore || len(page.Data) == 0 {
+			return ids, nil
+		}
+		startingAfter = page.Data[len(page.Data)-1].ID
+	}
 }
 
 func buildStringSetFromRelationshipItems(items []assignmentGroupRelationshipItem) types.Set {
