@@ -13,6 +13,15 @@ on:
 permissions:
   contents: read
 
+# Acceptance tests hit a single shared SimpleMDM tenant. Two workflow runs
+# in parallel (e.g. main + pr-into-upstream pushed back-to-back) race on
+# the same fixture apps and fail with "itunes_store_id is not unique."
+# Force one workflow run at a time across the whole repo. Pending runs
+# queue; we never want to cancel a partially-applied test mid-flight.
+concurrency:
+  group: simplemdm-tenant-tests
+  cancel-in-progress: false
+
 jobs:
   # Ensure project builds before running testing matrix
   build:
