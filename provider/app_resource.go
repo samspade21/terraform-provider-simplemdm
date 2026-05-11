@@ -3,6 +3,8 @@ package provider
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -27,15 +30,127 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// sha256OfFile streams the file at path and returns the lowercase hex digest.
+func sha256OfFile(p string) (string, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// binaryFileShaPlanModifier governs the computed binary_file_sha256 field.
+// When state already has a sha and the binary_file path isn't changing, the
+// stored sha stays in the plan (no spurious diff). Otherwise the value is
+// marked unknown so apply can fill it. This is more permissive than
+// UseStateForUnknown, which would lock a null state value to null forever
+// and trigger "inconsistent result after apply" the first time the field
+// is populated.
+type binaryFileShaPlanModifier struct{}
+
+func (binaryFileShaPlanModifier) Description(_ context.Context) string {
+	return "Reuses the stored sha when binary_file is unchanged; otherwise marks it unknown so apply can recompute."
+}
+
+func (m binaryFileShaPlanModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (binaryFileShaPlanModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// Read planned binary_file path first. App-store-only apps never set
+	// binary_file, so their sha is permanently null. Returning Unknown here
+	// when state is also null produces a post-apply drift ("planned Unknown
+	// but got null") on every Create for non-binary apps.
+	var planModel appResourceModel
+	if diags := req.Plan.Get(ctx, &planModel); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	noBinary := planModel.BinaryFile.IsNull() || planModel.BinaryFile.IsUnknown() || planModel.BinaryFile.ValueString() == ""
+
+	if noBinary {
+		// No binary in plan → sha stays null forever.
+		resp.PlanValue = types.StringNull()
+		return
+	}
+
+	// State has no recorded sha yet — apply will compute it.
+	if req.StateValue.IsNull() || req.StateValue.ValueString() == "" {
+		resp.PlanValue = types.StringUnknown()
+		return
+	}
+
+	// Both state and plan have a binary. Reuse the stored sha iff the
+	// local file's content matches it, otherwise let apply recompute.
+	newSha, err := sha256OfFile(planModel.BinaryFile.ValueString())
+	if err != nil {
+		resp.PlanValue = types.StringUnknown()
+		return
+	}
+	if newSha == req.StateValue.ValueString() {
+		resp.PlanValue = req.StateValue
+		return
+	}
+	resp.PlanValue = types.StringUnknown()
+}
+
+// binaryFileContentModifier suppresses path-only diffs on binary_file. If the
+// configured path differs from state but the file's sha256 matches the last
+// recorded binary_file_sha256, the plan keeps the state value so renames of
+// identical binaries don't re-upload. A genuine content change still drives
+// a diff.
+type binaryFileContentModifier struct{}
+
+func (binaryFileContentModifier) Description(_ context.Context) string {
+	return "Suppresses diffs when binary_file path changes but the file's sha256 matches the last uploaded binary."
+}
+
+func (m binaryFileContentModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (binaryFileContentModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.StateValue.IsNull() || req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
+		return
+	}
+	if req.StateValue.Equal(req.PlanValue) {
+		return
+	}
+
+	var stateModel appResourceModel
+	diags := req.State.Get(ctx, &stateModel)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if stateModel.BinaryFileSHA.IsNull() || stateModel.BinaryFileSHA.ValueString() == "" {
+		return
+	}
+
+	newSha, err := sha256OfFile(req.PlanValue.ValueString())
+	if err != nil {
+		return
+	}
+
+	if newSha == stateModel.BinaryFileSHA.ValueString() {
+		resp.PlanValue = req.StateValue
+	}
+}
+
 // binaryFileValidator validates that binary file paths exist and have correct extensions
 type binaryFileValidator struct{}
 
 func (v binaryFileValidator) Description(ctx context.Context) string {
-	return "value must be a path to an existing .ipa or .pkg file"
+	return "value must be a path to an existing .ipa, .pkg, or .dmg file"
 }
 
 func (v binaryFileValidator) MarkdownDescription(ctx context.Context) string {
-	return "value must be a path to an existing .ipa or .pkg file"
+	return "value must be a path to an existing .ipa, .pkg, or .dmg file"
 }
 
 func (v binaryFileValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
@@ -68,11 +183,11 @@ func (v binaryFileValidator) ValidateString(ctx context.Context, req validator.S
 
 	// Check extension
 	ext := strings.ToLower(filepath.Ext(path))
-	if ext != ".ipa" && ext != ".pkg" {
+	if ext != ".ipa" && ext != ".pkg" && ext != ".dmg" {
 		resp.Diagnostics.AddAttributeError(
 			req.Path,
 			"Invalid binary file type",
-			fmt.Sprintf("File must have .ipa or .pkg extension, got: %s", ext),
+			fmt.Sprintf("File must have .ipa, .pkg, or .dmg extension, got: %s", ext),
 		)
 		return
 	}
@@ -101,6 +216,7 @@ type appResourceModel struct {
 	AppStoreId           types.String `tfsdk:"app_store_id"`
 	BundleId             types.String `tfsdk:"bundle_id"`
 	BinaryFile           types.String `tfsdk:"binary_file"`
+	BinaryFileSHA        types.String `tfsdk:"binary_file_sha256"`
 	DeployTo             types.String `tfsdk:"deploy_to"`
 	Status               types.String `tfsdk:"status"`
 	AppType              types.String `tfsdk:"app_type"`
@@ -188,9 +304,10 @@ func (r *appResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			},
 			"binary_file": schema.StringAttribute{
 				Optional:    true,
-				Description: "Path to app binary (ipa or pkg) to upload. Required when managing enterprise, custom B2B, or macOS package apps. Use either this, app_store_id, or bundle_id.",
+				Description: "Path to app binary (ipa, pkg, or dmg) to upload. Required when managing enterprise, custom B2B, or macOS package/disk-image apps. Use either this, app_store_id, or bundle_id. Renames of the binary file with unchanged content do not trigger a re-upload — drift is tracked by sha256, surfaced as binary_file_sha256.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+					binaryFileContentModifier{},
 				},
 				Validators: []validator.String{
 					stringvalidator.ExactlyOneOf(
@@ -199,6 +316,13 @@ func (r *appResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 						path.MatchRoot("binary_file"),
 					),
 					binaryFileValidator{},
+				},
+			},
+			"binary_file_sha256": schema.StringAttribute{
+				Computed:    true,
+				Description: "SHA-256 of the most recently uploaded binary. Used to detect content drift independent of the local file path.",
+				PlanModifiers: []planmodifier.String{
+					binaryFileShaPlanModifier{},
 				},
 			},
 			"deploy_to": schema.StringAttribute{
@@ -216,35 +340,59 @@ func (r *appResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			"status": schema.StringAttribute{
 				Computed:    true,
 				Description: "The current deployment status of the app. Note: This is a write-only parameter; API does not return this value.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"app_type": schema.StringAttribute{
 				Computed:    true,
 				Description: "The catalog classification of the app, for example app store, enterprise, or custom b2b.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"version": schema.StringAttribute{
 				Computed:    true,
 				Description: "The latest version reported by SimpleMDM for the app.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"platform_support": schema.StringAttribute{
 				Computed:    true,
 				Description: "The platform supported by the app, such as iOS or macOS.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"processing_status": schema.StringAttribute{
 				Computed:    true,
 				Description: "The current processing status of the app binary within SimpleMDM.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"installation_channels": schema.ListAttribute{
 				Computed:    true,
 				ElementType: types.StringType,
 				Description: "The deployment channels supported by the app.",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"created_at": schema.StringAttribute{
 				Computed:    true,
 				Description: "Timestamp when the app was added to SimpleMDM.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"updated_at": schema.StringAttribute{
 				Computed:    true,
 				Description: "Timestamp when the app was last updated in SimpleMDM.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -352,6 +500,7 @@ func newAppResourceModelFromAPI(ctx context.Context, app *appAPIResponse) (appRe
 		"enterprise": true,
 		"custom b2b": true,
 		"custom":     true,
+		"shared":     true,
 	}
 	if app.Data.Attributes.AppType != "" && !knownAppTypes[app.Data.Attributes.AppType] {
 		diags.AddWarning(
@@ -655,6 +804,18 @@ func (r *appResource) Create(ctx context.Context, req resource.CreateRequest, re
 	// BinaryFile is input-only and should be preserved from plan
 	if !plan.BinaryFile.IsNull() {
 		newState.BinaryFile = plan.BinaryFile
+		sha, err := sha256OfFile(plan.BinaryFile.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddWarning(
+				"Could not hash binary_file",
+				fmt.Sprintf("Drift detection on binary content will be unavailable for this app until next apply: %v", err),
+			)
+			newState.BinaryFileSHA = types.StringNull()
+		} else {
+			newState.BinaryFileSHA = types.StringValue(sha)
+		}
+	} else {
+		newState.BinaryFileSHA = types.StringNull()
 	}
 
 	diags = resp.State.Set(ctx, newState)
@@ -711,6 +872,8 @@ func (r *appResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	if !state.BinaryFile.IsNull() {
 		newState.BinaryFile = state.BinaryFile
 	}
+	// API doesn't return the sha; preserve what we recorded on last upload.
+	newState.BinaryFileSHA = state.BinaryFileSHA
 
 	diags = resp.State.Set(ctx, &newState)
 	resp.Diagnostics.Append(diags...)
@@ -742,7 +905,14 @@ func (r *appResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		deployTo = plan.DeployTo.ValueString()
 	}
 
-	if !plan.BinaryFile.IsNull() && plan.BinaryFile.ValueString() != "" {
+	// Re-upload the binary only when its content actually changed. The
+	// plan modifier on binary_file keeps plan == state when the local file's
+	// sha matches binary_file_sha256, so a path-only rename of an unchanged
+	// binary lands here as a metadata-only update.
+	binaryContentChanged := !plan.BinaryFile.IsNull() && plan.BinaryFile.ValueString() != "" &&
+		(state.BinaryFile.IsNull() || plan.BinaryFile.ValueString() != state.BinaryFile.ValueString())
+
+	if binaryContentChanged {
 		err := r.appUpdateWithBinary(ctx, appID, plan.BinaryFile.ValueString(), name, deployTo)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -799,6 +969,18 @@ func (r *appResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	// BinaryFile is input-only and should be preserved from plan
 	if !plan.BinaryFile.IsNull() {
 		newState.BinaryFile = plan.BinaryFile
+		sha, err := sha256OfFile(plan.BinaryFile.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddWarning(
+				"Could not hash binary_file",
+				fmt.Sprintf("Drift detection on binary content will be unavailable for this app until next apply: %v", err),
+			)
+			newState.BinaryFileSHA = state.BinaryFileSHA
+		} else {
+			newState.BinaryFileSHA = types.StringValue(sha)
+		}
+	} else {
+		newState.BinaryFileSHA = types.StringNull()
 	}
 
 	diags = resp.State.Set(ctx, newState)
