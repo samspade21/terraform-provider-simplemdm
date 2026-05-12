@@ -83,6 +83,22 @@ var resourceDefinitions = []ResourceDefinition{
 		TestsOptional: true,
 	},
 	{
+		TypeName:     "simplemdm_assignmentgroup_profile_binding",
+		Factory:      AssignmentGroupProfileBindingResource,
+		DocsPath:     "docs/resources/assignmentgroup_profile_binding.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_assignmentgroup_profile_binding"},
+		TestFiles:    []string{"provider/assignmentgroup_bindings_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/assignment_groups/{assignment_group_id}/profiles/{profile_id}"},
+	},
+	{
+		TypeName:     "simplemdm_assignmentgroup_app_binding",
+		Factory:      AssignmentGroupAppBindingResource,
+		DocsPath:     "docs/resources/assignmentgroup_app_binding.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_assignmentgroup_app_binding"},
+		TestFiles:    []string{"provider/assignmentgroup_bindings_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/assignment_groups/{assignment_group_id}/apps/{app_id}"},
+	},
+	{
 		TypeName:     "simplemdm_device",
 		Factory:      DeviceResource,
 		DocsPath:     "docs/resources/device.md",
