@@ -4,26 +4,35 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
-// defaultDynamicAssignmentGroupID is the dataminr tenant's pre-seeded dynamic
-// assignment group. Tests can override via SIMPLEMDM_TEST_DYNAMIC_GROUP_ID so
-// they aren't pinned to a single tenant.
-const defaultDynamicAssignmentGroupID = "2310101"
-
 // testAccDynamicAssignmentGroupID returns the assignment group ID to bind
-// against. Defaults to the dataminr "Test Dynamic Group" but honours
-// SIMPLEMDM_TEST_DYNAMIC_GROUP_ID for portability.
-func testAccDynamicAssignmentGroupID() string {
-	if v := os.Getenv("SIMPLEMDM_TEST_DYNAMIC_GROUP_ID"); v != "" {
-		return v
-	}
-	return defaultDynamicAssignmentGroupID
+// against. Honours SIMPLEMDM_TEST_DYNAMIC_GROUP_ID for explicit pinning;
+// otherwise discovers the first dynamic assignment group in the tenant.
+// Skips the test if neither is available — the binding tests can only run
+// against an existing dynamic AG (the binding resources don't own the AG).
+func testAccDynamicAssignmentGroupID(t *testing.T) string {
+	t.Helper()
+	return envOrDiscover(t, "SIMPLEMDM_TEST_DYNAMIC_GROUP_ID", "a dynamic assignment group", func() (string, error) {
+		client, err := getTestClient()
+		if err != nil {
+			return "", err
+		}
+		groups, err := fetchAllAssignmentGroups(context.Background(), client)
+		if err != nil {
+			return "", err
+		}
+		for _, g := range groups {
+			if g.Attributes.GroupType == "dynamic" {
+				return fmt.Sprintf("%d", g.ID), nil
+			}
+		}
+		return "", nil
+	})
 }
 
 // testAccCheckAssignmentGroupStillExists confirms that, after destroying the
@@ -130,7 +139,7 @@ func testAccCheckAppBindingAbsent(s *terraform.State) error {
 func TestAccAssignmentGroupProfileBinding(t *testing.T) {
 	testAccPreCheck(t)
 
-	agID := testAccDynamicAssignmentGroupID()
+	agID := testAccDynamicAssignmentGroupID(t)
 
 	config := providerConfig + fmt.Sprintf(`
 resource "simplemdm_customprofile" "binding_fixture" {
@@ -189,7 +198,7 @@ resource "simplemdm_assignmentgroup_profile_binding" "test" {
 func TestAccAssignmentGroupAppBinding(t *testing.T) {
 	testAccPreCheck(t)
 
-	agID := testAccDynamicAssignmentGroupID()
+	agID := testAccDynamicAssignmentGroupID(t)
 
 	baseFixture := `
 resource "simplemdm_app" "binding_fixture" {
