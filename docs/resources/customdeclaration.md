@@ -19,7 +19,7 @@ Custom Declaration resource manages Declarative Device Management custom declara
 
 - `declaration_type` (String) The type of declaration being defined (e.g., com.apple.configuration.management.status-subscriptions).
 - `name` (String) A name for the custom declaration.
-- `payload` (String) The JSON payload for the declaration.
+- `payload` (String) The JSON payload for the declaration. Stored verbatim; semantically-equal JSON with different whitespace or key order will register as drift.
 
 ### Optional
 
