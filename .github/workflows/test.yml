@@ -127,5 +127,8 @@ jobs:
           # Apple; impossible to discover or fabricate.
           SIMPLEMDM_PUSH_CERT_PEM: ${{ secrets.SIMPLEMDM_PUSH_CERT_PEM }}
           SIMPLEMDM_PUSH_CERT_APPLE_ID: ${{ secrets.SIMPLEMDM_PUSH_CERT_APPLE_ID }}
-        run: go test -v -cover ./provider/... ./internal/...
-        timeout-minutes: 20
+        # -timeout 30m is required: the full acceptance suite hits a single
+        # SimpleMDM tenant sequentially and routinely runs 12–18 min once
+        # rate limits kick in. Go's default is 10 min and panics mid-run.
+        run: go test -v -cover -timeout 30m ./provider/... ./internal/...
+        timeout-minutes: 35
