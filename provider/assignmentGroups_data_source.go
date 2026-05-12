@@ -31,6 +31,7 @@ type assignmentGroupsDataSourceGroupModel struct {
 	AutoDeploy       types.Bool   `tfsdk:"auto_deploy"`
 	Priority         types.Int64  `tfsdk:"priority"`
 	AppTrackLocation types.Bool   `tfsdk:"app_track_location"`
+	GroupType        types.String `tfsdk:"group_type"`
 	CreatedAt        types.String `tfsdk:"created_at"`
 	UpdatedAt        types.String `tfsdk:"updated_at"`
 	DeviceCount      types.Int64  `tfsdk:"device_count"`
@@ -76,6 +77,10 @@ func (d *assignmentGroupsDataSource) Schema(_ context.Context, _ datasource.Sche
 						"app_track_location": schema.BoolAttribute{
 							Computed:    true,
 							Description: "Whether the SimpleMDM app tracks device location when installed for this assignment group.",
+						},
+						"group_type": schema.StringAttribute{
+							Computed:    true,
+							Description: "The group type of the assignment group. Typically \"static\" or \"dynamic\" — dynamic groups have membership rules authored in the SimpleMDM UI.",
 						},
 						"created_at": schema.StringAttribute{
 							Computed:    true,
@@ -145,6 +150,7 @@ func (d *assignmentGroupsDataSource) Read(ctx context.Context, req datasource.Re
 			AutoDeploy:       types.BoolValue(group.Attributes.AutoDeploy),
 			Priority:         types.Int64Value(int64(group.Attributes.Priority)),
 			AppTrackLocation: types.BoolValue(group.Attributes.AppTrackLocation),
+			GroupType:        types.StringValue(group.Attributes.GroupType),
 			DeviceCount:      types.Int64Value(int64(group.Attributes.DeviceCount)),
 			GroupCount:       types.Int64Value(int64(group.Attributes.GroupCount)),
 		}
@@ -263,6 +269,7 @@ type assignmentGroupDataAttributes struct {
 	AutoDeploy       bool   `json:"auto_deploy"`
 	Priority         int    `json:"priority"`
 	AppTrackLocation bool   `json:"app_track_location"`
+	GroupType        string `json:"group_type"`
 	CreatedAt        string `json:"created_at"`
 	UpdatedAt        string `json:"updated_at"`
 	DeviceCount      int    `json:"device_count"`

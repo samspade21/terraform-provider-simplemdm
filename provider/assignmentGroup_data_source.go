@@ -24,6 +24,7 @@ type assignmentGroupDataSourceModel struct {
 	AutoDeploy       types.Bool   `tfsdk:"auto_deploy"`
 	Priority         types.Int64  `tfsdk:"priority"`
 	AppTrackLocation types.Bool   `tfsdk:"app_track_location"`
+	GroupType        types.String `tfsdk:"group_type"`
 	Apps             types.Set    `tfsdk:"apps"`
 	Groups           types.Set    `tfsdk:"groups"`
 	Devices          types.Set    `tfsdk:"devices"`
@@ -75,6 +76,10 @@ func (d *assignmentGroupDataSource) Schema(_ context.Context, _ datasource.Schem
 			"app_track_location": schema.BoolAttribute{
 				Computed:    true,
 				Description: "Whether the SimpleMDM app tracks device location when installed for this assignment group.",
+			},
+			"group_type": schema.StringAttribute{
+				Computed:    true,
+				Description: "The group type of the assignment group. Typically \"static\" or \"dynamic\" — dynamic groups have membership rules authored in the SimpleMDM UI.",
 			},
 			"apps": schema.SetAttribute{
 				Computed:    true,

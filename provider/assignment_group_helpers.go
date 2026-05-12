@@ -33,6 +33,7 @@ type assignmentGroupAttributes struct {
 	GroupCount       int    `json:"group_count"`
 	Priority         *int   `json:"priority,omitempty"`
 	AppTrackLocation *bool  `json:"app_track_location,omitempty"`
+	GroupType        string `json:"group_type"`
 }
 
 type assignmentGroupRelationships struct {
@@ -353,6 +354,11 @@ func applyAssignmentGroupResponseToDataSourceModel(model *assignmentGroupDataSou
 	} else {
 		model.AppTrackLocation = types.BoolNull()
 	}
+
+	// group_type is returned by the API for every assignment group (static or
+	// dynamic). Always populate it so the Computed attribute is considered
+	// "set" and consumers can branch on the value.
+	model.GroupType = types.StringValue(response.Data.Attributes.GroupType)
 
 	// Always set CreatedAt and UpdatedAt, even if empty
 	// This ensures Computed fields in data sources are considered "set"
