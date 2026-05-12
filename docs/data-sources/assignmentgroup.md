@@ -61,7 +61,7 @@ output "group_details" {
 - `device_count` (Number) Number of devices currently assigned to the assignment group.
 - `devices` (Set of String) IDs of devices assigned directly to the assignment group.
 - `group_count` (Number) Number of device groups currently assigned to the assignment group.
-- `group_type` (String) The group type of the assignment group. Typically `static` or `dynamic` — dynamic groups have membership rules authored in the SimpleMDM UI.
+- `group_type` (String) The group type of the assignment group. Typically "static" or "dynamic" — dynamic groups have membership rules authored in the SimpleMDM UI.
 - `groups` (Set of String) IDs of device groups assigned to the assignment group.
 - `name` (String) The name of the assignment group.
 - `priority` (Number) The priority of the assignment group.
