@@ -2,18 +2,20 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -28,24 +30,25 @@ var (
 
 // assignment_groupResourceModel maps the resource schema data.
 type assignment_groupResourceModel struct {
-	Name             types.String `tfsdk:"name"`
-	AutoDeploy       types.Bool   `tfsdk:"auto_deploy"`
-	ID               types.String `tfsdk:"id"`
-	Apps             []appModel   `tfsdk:"apps"`
-	AppsUpdate       types.Bool   `tfsdk:"apps_update"`
-	AppsPush         types.Bool   `tfsdk:"apps_push"`
-	Profiles         types.Set    `tfsdk:"profiles"`
-	ProfilesSync     types.Bool   `tfsdk:"profiles_sync"`
-	Devices          types.Set    `tfsdk:"devices"`
-	Attributes       types.Map    `tfsdk:"attributes"`
-	Priority         types.String `tfsdk:"priority"`
-	AppTrackLocation types.Bool   `tfsdk:"app_track_location"`
-}
-
-type appModel struct {
-	AppID          types.String `tfsdk:"app_id"`
-	DeploymnetType types.String `tfsdk:"deployment_type"`
-	InstallType    types.String `tfsdk:"install_type"`
+	Name                types.String `tfsdk:"name"`
+	AutoDeploy          types.Bool   `tfsdk:"auto_deploy"`
+	Priority            types.Int64  `tfsdk:"priority"`
+	AppTrackLocation    types.Bool   `tfsdk:"app_track_location"`
+	ID                  types.String `tfsdk:"id"`
+	Apps                types.Set    `tfsdk:"apps"`
+	AppsInstallTypes    types.Map    `tfsdk:"apps_install_types"`
+	AppsDeploymentTypes types.Map    `tfsdk:"apps_deployment_types"`
+	AppsUpdate          types.Bool   `tfsdk:"apps_update"`
+	AppsPush            types.Bool   `tfsdk:"apps_push"`
+	Profiles            types.Set    `tfsdk:"profiles"`
+	ProfilesSync        types.Bool   `tfsdk:"profiles_sync"`
+	Groups              types.Set    `tfsdk:"groups"`
+	Devices             types.Set    `tfsdk:"devices"`
+	DevicesRemoveOthers types.Bool   `tfsdk:"devices_remove_others"`
+	CreatedAt           types.String `tfsdk:"created_at"`
+	UpdatedAt           types.String `tfsdk:"updated_at"`
+	DeviceCount         types.Int64  `tfsdk:"device_count"`
+	GroupCount          types.Int64  `tfsdk:"group_count"`
 }
 
 // AssignmentGroupResource is a helper function to simplify the provider implementation.
@@ -75,112 +78,158 @@ func (r *assignment_groupResource) Metadata(_ context.Context, req resource.Meta
 // Schema defines the schema for the resource.
 func (r *assignment_groupResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Assignment Group resource is used to manage group, you can assign App(s), Profile(s), Custom Profile(s), Custom Declaration(s), Device(s) and set addition details regarding Group. In case you dont want to manage device/app assignments use lifecycle. Currently App assignment will always show diff in configuration as API is not providing all needed data (request for API change was already submitted).",
+		Description: "Assignment Group resource is used to manage groups. You can assign apps, custom profiles, devices, and device groups, and configure additional assignment group settings.",
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Required:    true,
 				Optional:    false,
-				Description: "The name of the Group.",
+				Description: "The name of the Assignment Group.",
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
-				Description: "ID of the Group in SimpleMDM",
+				Description: "ID of the Assignment Group in SimpleMDM",
 			},
 			"auto_deploy": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
-				Description: "Optional. Whether the Apps should be automatically pushed to device(s) when they join this Group. Defaults to true",
+				Description: "Optional. Whether the Apps should be automatically pushed to device(s) when they join this Assignment Group. Defaults to true",
+			},
+			"priority": schema.Int64Attribute{
+				Optional: true,
+				Computed: true,
+				Validators: []validator.Int64{
+					int64validator.Between(0, 999),
+				},
+				Description: "Optional. Sets the priority order in which assignment groups are evaluated when devices are part of multiple groups. Lower numbers are evaluated first. Valid range: 0-999. If not set, SimpleMDM assigns a default priority.",
 			},
 			"app_track_location": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
-				Description: "Optional. If true, it tracks the location of IOS device when the SimpleMDM mobile app is installed. Defaults to true.",
+				Description: "Optional. Controls whether the SimpleMDM app tracks device location when installed.",
 			},
-			"apps": schema.ListNestedAttribute{
-				Optional: true,
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"app_id": schema.StringAttribute{
-							Required:    true,
-							Description: "ID of the Application in SimpleMDM",
-						},
-						"deployment_type": schema.StringAttribute{
-							Optional:    true,
-							Computed:    true,
-							Description: "Optional. Type of assignment group. Must be one of standard (for MDM app/media deployments) or munki for Munki app deployments. Defaults to standard",
-							Default:     stringdefault.StaticString("standard"),
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
-							Validators: []validator.String{
-								stringvalidator.OneOf("standard", "munki"),
-							},
-						},
-						"install_type": schema.StringAttribute{
-							Optional:    true,
-							Computed:    true,
-							Description: "Optional. The install type for munki assignment groups. Must be one of managed, self_serve, default_installs or managed_updates. This setting has no effect for non-munki (standard) assignment groups. Defaults to managed.",
-							Default:     stringdefault.StaticString("managed"),
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.UseStateForUnknown(),
-							},
-							Validators: []validator.String{
-								stringvalidator.OneOf("managed", "self_serve", "default_installs", "managed_updates"),
-							},
-						},
-					},
+			"apps": schema.SetAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+				Description: "Optional. Set of app IDs assigned to this assignment group. Each app is sent through POST /assignment_groups/{id}/apps/{app_id} with `deployment_type` / `install_type` taken from the matching entry in `apps_deployment_types` / `apps_install_types`, or SimpleMDM defaults if no entry exists.",
+			},
+			"apps_install_types": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Optional. Per-app `install_type` overrides keyed by app ID. Only the apps you list here use a non-default install_type; apps in the `apps` set without an entry here use SimpleMDM's default (`managed`). Valid values: `managed`, `self_serve`, `default_installs`, `managed_updates`. Has no effect for non-Munki (`standard`) groups.",
+				Validators: []validator.Map{
+					mapvalidator.ValueStringsAre(
+						stringvalidator.OneOf("managed", "self_serve", "default_installs", "managed_updates"),
+					),
 				},
-				Description: "Optional. List of Apps assigned to this group",
+			},
+			"apps_deployment_types": schema.MapAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Optional. Per-app `deployment_type` overrides keyed by app ID. Valid values: `standard`, `munki`. If unset for an app, SimpleMDM picks based on the assignment group's underlying type.",
+				Validators: []validator.Map{
+					mapvalidator.ValueStringsAre(
+						stringvalidator.OneOf("standard", "munki"),
+					),
+				},
 			},
 			"apps_update": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Default:     booldefault.StaticBool(true),
-				Description: "Optional. Updates associated apps on associated devices. A munki catalog refresh or MDM install command will be sent to all associated devices. Defaults to true",
+				Default:     booldefault.StaticBool(false),
+				Description: "Optional. Triggers 'Update Apps' command during apply. This sends an MDM install command to all associated devices for apps with available updates. Set to true when you want to push app updates. This is a one-time action on each apply where it's true. Difference from apps_push: update only installs if newer version available.",
 			},
 			"apps_push": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Default:     booldefault.StaticBool(true),
-				Description: "Optional. Installs associated apps to associated devices. A munki catalog refresh or MDM install command will be sent to all associated devices. Defaults to true.",
+				Default:     booldefault.StaticBool(false),
+				Description: "Optional. Triggers 'Push Apps' command during apply. This sends an MDM install command to all associated devices for all assigned apps, regardless of current version. Set to true when you want to reinstall or push apps. This is a one-time action on each apply where it's true. Difference from apps_update: push installs all apps.",
 			},
 			"profiles": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Optional. List of Configuration Profiles (Custom or predefined Profiles and Custom Declarations) assigned to this group",
+				Computed:    true,
+				Description: "Optional. List of Configuration Profiles (both Custom and predefined Profiles) assigned to this assignment group",
 			},
 			"profiles_sync": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Default:     booldefault.StaticBool(true),
-				Description: "Optional. Set true if you would like to send Sync Profiles command after Group creation or changes. Defaults to true.",
+				Default:     booldefault.StaticBool(false),
+				Description: "Optional. Triggers 'Sync Profiles' command during apply. This pushes all assigned profiles to devices in the assignment group. Set to true after profile changes to sync. ⚠️ Rate limited to 1 request per 30 seconds - wait between applies if true. This is a one-time action on each apply where it's true.",
+			},
+			"groups": schema.SetAttribute{
+				ElementType:        types.StringType,
+				Optional:           true,
+				Computed:           true,
+				DeprecationMessage: "The device_groups assignment API is deprecated by SimpleMDM. This only works with legacy_device_group_id from migrated groups. For accounts using the New Groups Experience, use device assignments instead.",
+				Description:        "Optional. List of Device Groups assigned to this Assignment Group. ⚠️ DEPRECATED: This uses a deprecated API that only works with legacy_device_group_id from previously migrated groups.",
 			},
 			"devices": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Optional. List of Devices assigned to this Group",
-			},
-			"attributes": schema.MapAttribute{
-				ElementType: types.StringType,
-				Optional:    true,
-				Description: "Optional. Map of Attributes and values set for this Group",
-			},
-			"priority": schema.StringAttribute{
-				Optional:    true,
-				Description: "Optional. The priority (0 to 20) of the assignment group. Default to 0",
-				Default:     stringdefault.StaticString("0"),
 				Computed:    true,
-				Validators: []validator.String{
-					stringvalidator.OneOf("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"),
-				},
+				Description: "Optional. List of Devices assigned to this Assignment Group",
+			},
+			"devices_remove_others": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "Optional. When true, devices assigned through Terraform will be removed from other assignment groups before being added to this one.",
+			},
+			"created_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the assignment group was created.",
+			},
+			"updated_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the assignment group was last updated.",
+			},
+			"device_count": schema.Int64Attribute{
+				Computed:    true,
+				Description: "Number of devices currently assigned to the assignment group.",
+			},
+			"group_count": schema.Int64Attribute{
+				Computed:    true,
+				Description: "Number of device groups currently assigned to the assignment group.",
 			},
 		},
 	}
+}
+
+// syncProfilesWithRetry handles profile sync with rate limit retry logic
+func (r *assignment_groupResource) syncProfilesWithRetry(ctx context.Context, groupID string) error {
+	maxRetries := 3
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		err := r.client.AssignmentGroupSyncProfiles(groupID)
+		if err == nil {
+			return nil
+		}
+
+		// Check for rate limit (429 status or rate limit in error message)
+		if strings.Contains(err.Error(), "429") || strings.Contains(strings.ToLower(err.Error()), "rate limit") {
+			if attempt < maxRetries {
+				// Wait 30 seconds before retry
+				select {
+				case <-ctx.Done():
+					return fmt.Errorf("operation cancelled: %w", ctx.Err())
+				case <-time.After(30 * time.Second):
+					continue
+				}
+			}
+			return fmt.Errorf("profile sync rate limited after %d attempts. Please wait 30 seconds between sync operations", maxRetries+1)
+		}
+
+		// Non-rate-limit error, don't retry
+		return err
+	}
+
+	return fmt.Errorf("profile sync failed after %d attempts", maxRetries+1)
 }
 
 // Import function
@@ -199,8 +248,12 @@ func (r *assignment_groupResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	// Generate API request body from plan
-	assignmentgroup, err := r.client.AssignmentGroupCreate(plan.Name.ValueString(), plan.AutoDeploy.ValueBool(), plan.Priority.ValueString(), plan.AppTrackLocation.ValueBool())
+	assignmentgroup, err := createAssignmentGroup(ctx, r.client, assignmentGroupUpsertRequest{
+		Name:             plan.Name.ValueString(),
+		AutoDeploy:       boolPointerFromType(plan.AutoDeploy),
+		Priority:         int64PointerFromType(plan.Priority),
+		AppTrackLocation: boolPointerFromType(plan.AppTrackLocation),
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating assignment group",
@@ -211,109 +264,118 @@ func (r *assignment_groupResource) Create(ctx context.Context, req resource.Crea
 
 	plan.ID = types.StringValue(strconv.Itoa(assignmentgroup.Data.ID))
 
-	//setting attributes
-	for attribute, value := range plan.Attributes.Elements() {
-		err := r.client.AttributeSetAttributeForDeviceGroup(plan.ID.ValueString(), attribute, strings.Replace(value.String(), "\"", "", 2))
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating device group attribute",
-				"Could not set attribute value for device group, unexpected error: "+err.Error(),
-			)
-			return
-		}
+	// Block until the new assignment group is addressable. SimpleMDM has a
+	// brief eventual-consistency window between when /assignment_groups POST
+	// returns the new ID and when /assignment_groups/{id}/<rel>/{otherID}
+	// endpoints start responding. Doing the GET-before-assign here is more
+	// reliable than retrying each individual assign call.
+	if err := waitForAssignmentGroupAddressable(ctx, r.client, plan.ID.ValueString()); err != nil {
+		resp.Diagnostics.AddError(
+			"Error waiting for assignment group to become addressable",
+			"Could not read assignment group "+plan.ID.ValueString()+" after creation: "+err.Error(),
+		)
+		return
 	}
 
-	for _, app := range plan.Apps {
-		err := r.client.AssignmentGroupAssignApp(plan.ID.ValueString(), app.AppID.ValueString(), app.DeploymnetType.ValueString(), app.InstallType.ValueString())
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating device group apps",
-				"Could not assing app to device group, unexpected error: "+err.Error(),
-			)
-			return
-		}
+	// Assign all apps in plan, applying per-app install_type / deployment_type
+	// overrides where the user supplied them.
+	if err := assignAppsToGroup(
+		ctx, r.client, plan.ID.ValueString(),
+		plan.Apps,
+		stringMapFromTypesMap(plan.AppsInstallTypes),
+		stringMapFromTypesMap(plan.AppsDeploymentTypes),
+	); err != nil {
+		resp.Diagnostics.AddError(
+			"Error assigning apps to assignment group",
+			"Could not assign apps to assignment group, unexpected error: "+err.Error(),
+		)
+		return
 	}
 
 	// Assign all profiles in plan
-	for _, profileId := range plan.Profiles.Elements() {
-		err := r.client.AssignmentGroupAssignObject(plan.ID.ValueString(), strings.Replace(profileId.String(), "\"", "", 2), "profiles")
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating assignment group profile assignment",
-				"Could not update assignment group profile assignment, unexpected error: "+err.Error(),
-			)
-			return
-		}
+	if err := assignObjectsToGroup(ctx, r.client, plan.ID.ValueString(), plan.Profiles, "profiles", false); err != nil {
+		resp.Diagnostics.AddError(
+			"Error assigning profiles to assignment group",
+			"Could not assign profiles to assignment group, unexpected error: "+err.Error(),
+		)
+		return
 	}
 
-	//assign all devices in plan
-	for _, deviceId := range plan.Devices.Elements() {
-		err := r.client.AssignmentGroupAssignObject(plan.ID.ValueString(), strings.Replace(deviceId.String(), "\"", "", 2), "devices")
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating assignment group device group assignment",
-				"Could not update assignment group device group, unexpected error: "+err.Error(),
-			)
-			return
-		}
+	// Assign all groups in plan
+	if err := assignObjectsToGroup(ctx, r.client, plan.ID.ValueString(), plan.Groups, "device_groups", false); err != nil {
+		resp.Diagnostics.AddError(
+			"Error assigning device groups to assignment group",
+			"Could not assign device groups to assignment group, unexpected error: "+err.Error(),
+		)
+		return
+	}
+
+	// Assign all devices in plan
+	if err := assignObjectsToGroup(ctx, r.client, plan.ID.ValueString(), plan.Devices, "devices", boolValueOrDefault(plan.DevicesRemoveOthers, false)); err != nil {
+		resp.Diagnostics.AddError(
+			"Error assigning devices to assignment group",
+			"Could not assign devices to assignment group, unexpected error: "+err.Error(),
+		)
+		return
 	}
 
 	if plan.AppsUpdate.ValueBool() {
 		err := r.client.AssignmentGroupUpdateInstalledApps(plan.ID.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error when sending command to Update Apps, deleting group to prevent issus next run.",
-				"Could not send Apps Update command, unexpected error: "+err.Error(),
+			resp.Diagnostics.AddWarning(
+				"Failed to send Update Apps command",
+				fmt.Sprintf("Assignment group created successfully, but update apps command failed: %s. You may need to trigger manually.", err.Error()),
 			)
-			err := r.client.AssignmentGroupDelete(plan.ID.ValueString())
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error Deleting SimpleMDM assignment group",
-					"Could not delete assignment group, unexpected error: "+err.Error(),
-				)
-				return
-			}
-			return
 		}
 	}
 
 	if plan.AppsPush.ValueBool() {
 		err := r.client.AssignmentGroupPushApps(plan.ID.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error when sending command to Push Apps, deleting group to prevent issus next run.",
-				"Could not send Push Apps command, unexpected error: "+err.Error(),
+			resp.Diagnostics.AddWarning(
+				"Failed to send Push Apps command",
+				fmt.Sprintf("Assignment group created successfully, but push apps command failed: %s. You may need to trigger manually.", err.Error()),
 			)
-			err := r.client.AssignmentGroupDelete(plan.ID.ValueString())
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error Deleting SimpleMDM assignment group",
-					"Could not delete assignment group, unexpected error: "+err.Error(),
-				)
-				return
-			}
-			return
 		}
 	}
 
 	if plan.ProfilesSync.ValueBool() {
-		err := r.client.AssignmentGroupSyncProfiles(plan.ID.ValueString())
+		err := r.syncProfilesWithRetry(ctx, plan.ID.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error when sending command to Sync Profiles, deleting group to prevent issus next run.",
-				"Could not send Sync Profiles command, unexpected error: "+err.Error(),
+			resp.Diagnostics.AddWarning(
+				"Failed to sync profiles",
+				fmt.Sprintf("Assignment group created successfully, but profile sync failed: %s. Profiles may need manual sync.", err.Error()),
 			)
-			err := r.client.AssignmentGroupDelete(plan.ID.ValueString())
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error Deleting SimpleMDM assignment group",
-					"Could not delete assignment group, unexpected error: "+err.Error(),
-				)
-				return
-			}
-			return
 		}
 	}
+
+	fetched, err := fetchAssignmentGroup(ctx, r.client, plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error refreshing assignment group state",
+			"Could not read assignment group after creation: "+err.Error(),
+		)
+		return
+	}
+
+	// Save the planned relationship values before applying API response
+	// This handles eventual consistency where API may not immediately return assigned items
+	plannedApps := plan.Apps
+	plannedProfiles := plan.Profiles
+	plannedGroups := plan.Groups
+	plannedDevices := plan.Devices
+
+	// Check what the API actually returned before applying to model
+	apiReturnedApps := len(fetched.Data.Relationships.Apps.Data) > 0
+	apiReturnedProfiles := len(fetched.Data.Relationships.Profiles.Data) > 0
+	apiReturnedGroups := len(fetched.Data.Relationships.DeviceGroups.Data) > 0
+	apiReturnedDevices := len(fetched.Data.Relationships.Devices.Data) > 0
+
+	applyAssignmentGroupResponseToResourceModel(&plan, fetched)
+
+	// Preserve planned relationships if API hasn't returned them yet (eventual consistency)
+	preservePlannedRelationships(&plan, plannedApps, plannedProfiles, plannedGroups, plannedDevices,
+		apiReturnedApps, apiReturnedProfiles, apiReturnedGroups, apiReturnedDevices)
 
 	// Set state to fully populated data
 	diags = resp.State.Set(ctx, plan)
@@ -334,9 +396,9 @@ func (r *assignment_groupResource) Read(ctx context.Context, req resource.ReadRe
 	}
 
 	// Get refreshed assignment group values from SimpleMDM
-	assignmentGroup, err := r.client.AssignmentGroupGet(state.ID.ValueString())
+	assignmentGroup, err := fetchAssignmentGroup(ctx, r.client, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -347,123 +409,7 @@ func (r *assignment_groupResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	//load attributes for given group
-	attributes, err := r.client.AttributeGetAttributesForGroup(state.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error Reading SimpleMDM device group attributes",
-			"Could not read SimpleMDM device group attributes"+state.ID.ValueString()+": "+err.Error(),
-		)
-		return
-	}
-
-	//adding attributes to the map
-	attributePresent := false
-	attributesElements := map[string]attr.Value{}
-	for _, attribute := range attributes.Data {
-		if attribute.Attributes.Source == "group" {
-			attributesElements[attribute.ID] = types.StringValue(attribute.Attributes.Value)
-			attributePresent = true
-		}
-	}
-	if attributePresent {
-		attributesSetValue, _ := types.MapValue(types.StringType, attributesElements)
-		state.Attributes = attributesSetValue
-	} else {
-		attributesSetValue := types.MapNull(types.StringType)
-		state.Attributes = attributesSetValue
-	}
-
-	// Load all profiles in SimpleMDM
-	profiles, err := r.client.ProfileGetAll()
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error Reading SimpleMDM profiles",
-			"Could not read SimpleMDM profiles: "+err.Error(),
-		)
-		return
-	}
-
-	//read apps and add them to state
-	// The SimpleMDM API does not return deployment_type and install_type on
-	// assignment group reads, so the provider receives empty strings. Preserve
-	// the value already in state to avoid perpetual plan diffs.
-	// See: https://github.com/DavidKrau/terraform-provider-simplemdm/issues/27
-	if len(assignmentGroup.Data.Relationships.Apps.Data) >= 1 {
-		priorApps := map[string]appModel{}
-		for _, a := range state.Apps {
-			priorApps[a.AppID.ValueString()] = a
-		}
-
-		state.Apps = []appModel{}
-		for _, app := range assignmentGroup.Data.Relationships.Apps.Data {
-			appID := strconv.Itoa(app.ID)
-			deploymentType := app.DeploymnetType
-			installType := app.InstallType
-
-			if prior, ok := priorApps[appID]; ok {
-				if deploymentType == "" {
-					deploymentType = prior.DeploymnetType.ValueString()
-				}
-				if installType == "" {
-					installType = prior.InstallType.ValueString()
-				}
-			}
-
-			state.Apps = append(state.Apps, appModel{
-				AppID:          types.StringValue(appID),
-				DeploymnetType: types.StringValue(deploymentType),
-				InstallType:    types.StringValue(installType),
-			})
-		}
-	} else {
-		state.Apps = nil
-	}
-	//read all profiles and put them to slice
-	profilesPresent := false
-	profilesElements := []attr.Value{}
-
-	for _, profile := range profiles.Data {
-		for _, group := range profile.Relationships.Groups.Data {
-			if strconv.Itoa(group.ID) == state.ID.ValueString() {
-				profilesElements = append(profilesElements, types.StringValue(strconv.Itoa(profile.ID)))
-				profilesPresent = true
-
-			}
-		}
-
-	}
-
-	//if there are profile or custom profiles return them to state
-	if profilesPresent {
-		profilesSetValue, _ := types.SetValue(types.StringType, profilesElements)
-		state.Profiles = profilesSetValue
-	} else {
-		profilesSetValue := types.SetNull(types.StringType)
-		state.Profiles = profilesSetValue
-	}
-
-	//read all devices and put them to slice
-	devicesPresent := false
-	devicesElements := []attr.Value{}
-	for _, deviceAssigned := range assignmentGroup.Data.Relationships.Devices.Data {
-		devicesElements = append(devicesElements, types.StringValue(strconv.Itoa(deviceAssigned.ID)))
-		devicesPresent = true
-	}
-	//if there are groups return them to state
-	if devicesPresent {
-		devicesSetValue, _ := types.SetValue(types.StringType, devicesElements)
-		state.Devices = devicesSetValue
-	} else {
-		devicesSetValue := types.SetNull(types.StringType)
-		state.Devices = devicesSetValue
-	}
-
-	// Overwrite items with refreshed state
-	state.Name = types.StringValue(assignmentGroup.Data.Attributes.Name)
-	state.AutoDeploy = types.BoolValue(assignmentGroup.Data.Attributes.AutoDeploy)
-	state.AppTrackLocation = types.BoolValue(assignmentGroup.Data.Attributes.AppTrackLocation)
-	state.Priority = types.StringValue(strconv.Itoa(assignmentGroup.Data.Attributes.Priority))
+	applyAssignmentGroupResponseToResourceModel(&state, assignmentGroup)
 
 	// Set refreshed state
 	diags = resp.State.Set(ctx, &state)
@@ -484,68 +430,12 @@ func (r *assignment_groupResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	// compare app in state, add missing apps and remove and re-add apps with missmatch in config of the app
-	for _, planApp := range plan.Apps {
-		found := false
-		update := false
-		for _, stateApp := range state.Apps {
-			if stateApp.AppID == planApp.AppID {
-				found = true
-				if stateApp.DeploymnetType != planApp.DeploymnetType {
-					update = true
-				}
-				if stateApp.InstallType != planApp.InstallType {
-					update = true
-				}
-			}
-		}
-		// app needs update remove it first, and later add it again
-		if update {
-			err := r.client.AssignmentGroupUnAssignApp(plan.ID.ValueString(), planApp.AppID.ValueString())
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error updating device group apps",
-					"Could not un-assing app from device group, unexpected error: "+err.Error(),
-				)
-				return
-			}
-			found = false
-		}
-		if !found {
-			err := r.client.AssignmentGroupAssignApp(plan.ID.ValueString(), planApp.AppID.ValueString(), planApp.DeploymnetType.ValueString(), planApp.InstallType.ValueString())
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error updating device group apps",
-					"Could not assing app to device group, unexpected error: "+err.Error(),
-				)
-				return
-			}
-		}
-
-	}
-
-	//remove any left over apps in state
-	for _, stateApp := range state.Apps {
-		found := false
-		for _, planApp := range plan.Apps {
-			if stateApp.AppID == planApp.AppID {
-				found = true
-			}
-		}
-		if !found {
-			err := r.client.AssignmentGroupUnAssignApp(plan.ID.ValueString(), stateApp.AppID.ValueString())
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error updating device group apps",
-					"Could not un-assing app from device group, unexpected error: "+err.Error(),
-				)
-				return
-			}
-		}
-	}
-
-	// Generate API request body from plan
-	err := r.client.AssignmentGroupUpdate(plan.Name.ValueString(), plan.AutoDeploy.ValueBool(), plan.ID.ValueString(), plan.AppTrackLocation.ValueBool(), plan.Priority.ValueString())
+	err := updateAssignmentGroup(ctx, r.client, plan.ID.ValueString(), assignmentGroupUpsertRequest{
+		Name:             plan.Name.ValueString(),
+		AutoDeploy:       boolPointerFromType(plan.AutoDeploy),
+		Priority:         int64PointerFromType(plan.Priority),
+		AppTrackLocation: boolPointerFromType(plan.AppTrackLocation),
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating assignment group",
@@ -554,168 +444,104 @@ func (r *assignment_groupResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	//comparing planed attributes and their values to attributes in SimpleMDM
-	for planAttribute, planValue := range plan.Attributes.Elements() {
-		found := false
-		for stateAttribute, stateValue := range state.Attributes.Elements() {
-			if planAttribute == stateAttribute {
-				found = true
-				if planValue != stateValue {
-					err := r.client.AttributeSetAttributeForDeviceGroup(plan.ID.ValueString(), planAttribute, strings.Replace(planValue.String(), "\"", "", 2))
-					if err != nil {
-						resp.Diagnostics.AddError(
-							"Error updating SimpleMDM device group attributes value",
-							"Could not update SimpleMDM device group attributes value "+plan.ID.ValueString()+": "+err.Error(),
-						)
-						return
-					}
-				}
-				break
-			}
-		}
-		if !found {
-			err := r.client.AttributeSetAttributeForDeviceGroup(plan.ID.ValueString(), planAttribute, strings.Replace(planValue.String(), "\"", "", 2))
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error updating SimpleMDM device group attributes value",
-					"Could not update SimpleMDM device group attributes value "+plan.ID.ValueString()+": "+err.Error(),
-				)
-				return
-			}
-		}
+	// Update all assigned apps with their per-app install_type / deployment_type overrides
+	if err := updateAssignmentGroupApps(
+		ctx, r.client, plan.ID.ValueString(),
+		state.Apps, plan.Apps,
+		stringMapFromTypesMap(state.AppsInstallTypes), stringMapFromTypesMap(plan.AppsInstallTypes),
+		stringMapFromTypesMap(state.AppsDeploymentTypes), stringMapFromTypesMap(plan.AppsDeploymentTypes),
+	); err != nil {
+		resp.Diagnostics.AddError(
+			"Error updating assignment group app assignments",
+			"Could not update assignment group app assignments, unexpected error: "+err.Error(),
+		)
+		return
 	}
 
-	//comparing attributes from SimpleMDM to the plan to find attributes set manually in MDM
-	for stateAttribute := range state.Attributes.Elements() {
-		found := false
-		for planAttribute := range plan.Attributes.Elements() {
-			if stateAttribute == planAttribute {
-				found = true
-				break
-			}
-		}
-		if !found {
-			err := r.client.AttributeSetAttributeForDeviceGroup(plan.ID.ValueString(), stateAttribute, "")
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error updating SimpleMDM device group attributes value",
-					"Could not update SimpleMDM device group attributes value "+plan.ID.ValueString()+": "+err.Error(),
-				)
-				return
-			}
-		}
+	// Update all assigned profiles
+	if err := updateAssignmentGroupObjects(ctx, r.client, plan.ID.ValueString(), state.Profiles, plan.Profiles, "profiles", false); err != nil {
+		resp.Diagnostics.AddError(
+			"Error updating assignment group profile assignments",
+			"Could not update assignment group profile assignments, unexpected error: "+err.Error(),
+		)
+		return
 	}
 
-	//Handling assigned profiles
-	//reading assigned profiles from simpleMDM
-	stateProfiles := []string{}
-	for _, profileId := range state.Profiles.Elements() { //<< edit here
-		stateProfiles = append(stateProfiles, strings.Replace(profileId.String(), "\"", "", 2))
+	// Update all assigned groups
+	if err := updateAssignmentGroupObjects(ctx, r.client, plan.ID.ValueString(), state.Groups, plan.Groups, "device_groups", false); err != nil {
+		resp.Diagnostics.AddError(
+			"Error updating assignment group device group assignments",
+			"Could not update assignment group device group assignments, unexpected error: "+err.Error(),
+		)
+		return
 	}
 
-	//reading configured profiles from TF file
-	planProfiles := []string{}
-	for _, profileId := range plan.Profiles.Elements() {
-		planProfiles = append(planProfiles, strings.Replace(profileId.String(), "\"", "", 2))
-	}
-
-	// creating diff
-	profilesToAdd, profilesToRemove := diffFunction(stateProfiles, planProfiles)
-
-	//adding profiles
-	for _, profileId := range profilesToAdd {
-		err := r.client.AssignmentGroupAssignObject(plan.ID.ValueString(), profileId, "profiles")
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating assignment group profile assignment",
-				"Could not update assignment group profile assignment, unexpected error: "+err.Error(),
-			)
-			return
-		}
-	}
-
-	//removing profiles
-	for _, profileId := range profilesToRemove {
-		err := r.client.AssignmentGroupUnAssignObject(plan.ID.ValueString(), profileId, "profiles")
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating assignment group app assignment",
-				"Could not update assignment group app assignment, unexpected error: "+err.Error(),
-			)
-			return
-		}
-	}
-
-	//handling assigned devices
-	//reading currently assigned devices
-	stateDevices := []string{}
-	for _, device := range state.Devices.Elements() {
-		stateDevices = append(stateDevices, strings.Replace(device.String(), "\"", "", 2))
-	}
-	//reading configured apps in TF file
-	planDevices := []string{}
-	for _, device := range plan.Devices.Elements() {
-		planDevices = append(planDevices, strings.Replace(device.String(), "\"", "", 2))
-	}
-	//creating diff
-	devicesToAdd, devicesToRemove := diffFunction(stateDevices, planDevices)
-
-	//devices to add
-	for _, deviceId := range devicesToAdd {
-		err := r.client.AssignmentGroupAssignObject(plan.ID.ValueString(), deviceId, "devices")
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating assignment group device group assignment",
-				"Could not update assignment group device group, unexpected error: "+err.Error(),
-			)
-			return
-		}
-	}
-
-	//devices to remove
-	for _, deviceId := range devicesToRemove {
-		err := r.client.AssignmentGroupUnAssignObject(plan.ID.ValueString(), deviceId, "devices")
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating assignment group device assignment",
-				"Could not update assignment group device assignment, unexpected error: "+err.Error(),
-			)
-			return
-		}
+	// Update all assigned devices
+	if err := updateAssignmentGroupObjects(ctx, r.client, plan.ID.ValueString(), state.Devices, plan.Devices, "devices", boolValueOrDefault(plan.DevicesRemoveOthers, false)); err != nil {
+		resp.Diagnostics.AddError(
+			"Error updating assignment group device assignments",
+			"Could not update assignment group device assignments, unexpected error: "+err.Error(),
+		)
+		return
 	}
 
 	if plan.AppsUpdate.ValueBool() {
 		err := r.client.AssignmentGroupUpdateInstalledApps(plan.ID.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating assignment App update failed",
-				"Could not update assignment App update failed, unexpected error: "+err.Error(),
+			resp.Diagnostics.AddWarning(
+				"Failed to send Update Apps command",
+				fmt.Sprintf("Assignment group updated successfully, but update apps command failed: %s. You may need to trigger manually.", err.Error()),
 			)
-			return
 		}
 	}
 
 	if plan.AppsPush.ValueBool() {
 		err := r.client.AssignmentGroupPushApps(plan.ID.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating assignment App push failed",
-				"Could not update assignment App push failed, unexpected error: "+err.Error(),
+			resp.Diagnostics.AddWarning(
+				"Failed to send Push Apps command",
+				fmt.Sprintf("Assignment group updated successfully, but push apps command failed: %s. You may need to trigger manually.", err.Error()),
 			)
-			return
 		}
 	}
 
 	if plan.ProfilesSync.ValueBool() {
-		err := r.client.AssignmentGroupSyncProfiles(plan.ID.ValueString())
+		err := r.syncProfilesWithRetry(ctx, plan.ID.ValueString())
 		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error updating assignment group profile sync",
-				"Could not update assignment group profile sync, unexpected error: "+err.Error(),
+			resp.Diagnostics.AddWarning(
+				"Failed to sync profiles",
+				fmt.Sprintf("Assignment group updated successfully, but profile sync failed: %s. Profiles may need manual sync.", err.Error()),
 			)
-			return
 		}
 	}
+
+	fetched, err := fetchAssignmentGroup(ctx, r.client, plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error refreshing assignment group state",
+			"Could not read assignment group after update: "+err.Error(),
+		)
+		return
+	}
+
+	// Save the planned relationship values before applying API response
+	// This handles eventual consistency where API may not immediately return assigned items
+	plannedApps := plan.Apps
+	plannedProfiles := plan.Profiles
+	plannedGroups := plan.Groups
+	plannedDevices := plan.Devices
+
+	// Check what the API actually returned before applying to model
+	apiReturnedApps := len(fetched.Data.Relationships.Apps.Data) > 0
+	apiReturnedProfiles := len(fetched.Data.Relationships.Profiles.Data) > 0
+	apiReturnedGroups := len(fetched.Data.Relationships.DeviceGroups.Data) > 0
+	apiReturnedDevices := len(fetched.Data.Relationships.Devices.Data) > 0
+
+	applyAssignmentGroupResponseToResourceModel(&plan, fetched)
+
+	// Preserve planned relationships if API hasn't returned them yet (eventual consistency)
+	preservePlannedRelationships(&plan, plannedApps, plannedProfiles, plannedGroups, plannedDevices,
+		apiReturnedApps, apiReturnedProfiles, apiReturnedGroups, apiReturnedDevices)
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -742,37 +568,4 @@ func (r *assignment_groupResource) Delete(ctx context.Context, req resource.Dele
 		)
 		return
 	}
-}
-
-// helper function to get diff between two groups
-func diffFunction(state []string, plan []string) (add []string, remove []string) {
-	IDsToAdd := []string{}
-	IDsToRemove := []string{}
-	for _, planObject := range plan {
-		ispresent := false
-		for _, stateObject := range state {
-			if planObject == stateObject {
-				ispresent = true
-				break
-			}
-		}
-
-		if !ispresent {
-			IDsToAdd = append(IDsToAdd, planObject)
-		}
-	}
-
-	for _, stateObject := range state {
-		ispresent := false
-		for _, planObject := range plan {
-			if stateObject == planObject {
-				ispresent = true
-				break
-			}
-		}
-		if !ispresent {
-			IDsToRemove = append(IDsToRemove, stateObject)
-		}
-	}
-	return IDsToAdd, IDsToRemove
 }

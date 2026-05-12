@@ -2,16 +2,18 @@ package provider
 
 import (
 	"context"
+	"regexp"
 	"strconv"
-	"strings"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -25,9 +27,9 @@ var (
 // scriptResourceModel maps the resource schema data.
 type scriptResourceModel struct {
 	Name            types.String `tfsdk:"name"`
-	ScriptFile      types.String `tfsdk:"scriptfile"`
+	Content         types.String `tfsdk:"content"`
 	ID              types.String `tfsdk:"id"`
-	VariableSupport types.Bool   `tfsdk:"variablesupport"`
+	VariableSupport types.Bool   `tfsdk:"variable_support"`
 	CreatedAt       types.String `tfsdk:"created_at"`
 	UpdatedAt       types.String `tfsdk:"updated_at"`
 }
@@ -66,10 +68,16 @@ func (r *scriptResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Optional:    false,
 				Description: "Required. A name for the Script. Example: \"My First Script managed by terraform\"",
 			},
-			"scriptfile": schema.StringAttribute{
+			"content": schema.StringAttribute{
 				Required:    true,
 				Optional:    false,
-				Description: "Required. Can be directly string or you can use function 'file' or 'templatefile' to load string from file. Emaple: scriptfile = file(\"./scripts/script.sh\") or scriptfile = <<-EOT\n #!/bin/bash\n echo \"Hello!!\"\n EOT ",
+				Description: "Required. The script content. Must begin with a valid shebang (e.g., #!/bin/sh). Can be loaded from a file using the file() or templatefile() functions. Example: content = file(\"./scripts/script.sh\")",
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^#!`),
+						"script content must begin with a shebang (e.g., #!/bin/sh)",
+					),
+				},
 			},
 			"id": schema.StringAttribute{
 				Computed: true,
@@ -78,11 +86,11 @@ func (r *scriptResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				},
 				Description: "ID of a Script in SimpleMDM",
 			},
-			"variablesupport": schema.BoolAttribute{
+			"variable_support": schema.BoolAttribute{
 				Optional:    true,
-				Default:     booldefault.StaticBool(true),
+				Default:     booldefault.StaticBool(false),
 				Computed:    true,
-				Description: "Optional. A boolean true or false. Whether or not to enable variable support in this script. Defaults to false",
+				Description: "Optional. Whether to enable variable support in this script. The provider converts boolean values to the API's expected format. Defaults to false.",
 			},
 			"created_at": schema.StringAttribute{
 				Computed: true,
@@ -115,7 +123,7 @@ func (r *scriptResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	// Generate API request body from plan
-	script, err := r.client.ScriptCreate(plan.Name.ValueString(), plan.VariableSupport.ValueBool(), plan.ScriptFile.ValueString())
+	script, err := r.client.ScriptCreate(plan.Name.ValueString(), plan.VariableSupport.ValueBool(), plan.Content.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating script",
@@ -128,7 +136,8 @@ func (r *scriptResource) Create(ctx context.Context, req resource.CreateRequest,
 	plan.ID = types.StringValue(strconv.Itoa(script.Data.ID))
 	plan.CreatedAt = types.StringValue(script.Data.Attributes.CreatedAt)
 	plan.UpdatedAt = types.StringValue(script.Data.Attributes.UpdatedAt)
-	plan.ScriptFile = types.StringValue(script.Data.Attributes.Content)
+	plan.Content = types.StringValue(script.Data.Attributes.Content)
+	plan.VariableSupport = types.BoolValue(script.Data.Attributes.VariableSupport)
 
 	// Set state to fully populated data
 	diags = resp.State.Set(ctx, plan)
@@ -150,7 +159,7 @@ func (r *scriptResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// Get script values from SimpleMDM
 	script, err := r.client.ScriptGet(state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -163,7 +172,7 @@ func (r *scriptResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	// Overwrite items with refreshed state
 	state.Name = types.StringValue(script.Data.Attributes.Name)
-	state.ScriptFile = types.StringValue(script.Data.Attributes.Content)
+	state.Content = types.StringValue(script.Data.Attributes.Content)
 	state.CreatedAt = types.StringValue(script.Data.Attributes.CreatedAt)
 	state.UpdatedAt = types.StringValue(script.Data.Attributes.UpdatedAt)
 	state.VariableSupport = types.BoolValue(script.Data.Attributes.VariableSupport)
@@ -186,7 +195,7 @@ func (r *scriptResource) Update(ctx context.Context, req resource.UpdateRequest,
 	}
 
 	// Generate API request body from plan
-	script, err := r.client.ScriptUpdate(plan.Name.ValueString(), plan.VariableSupport.ValueBool(), plan.ScriptFile.ValueString(), plan.ID.ValueString())
+	script, err := r.client.ScriptUpdate(plan.Name.ValueString(), plan.VariableSupport.ValueBool(), plan.Content.ValueString(), plan.ID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error updating script",
@@ -195,7 +204,10 @@ func (r *scriptResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
+	plan.Content = types.StringValue(script.Data.Attributes.Content)
 	plan.UpdatedAt = types.StringValue(script.Data.Attributes.UpdatedAt)
+	plan.CreatedAt = types.StringValue(script.Data.Attributes.CreatedAt)
+	plan.VariableSupport = types.BoolValue(script.Data.Attributes.VariableSupport)
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)

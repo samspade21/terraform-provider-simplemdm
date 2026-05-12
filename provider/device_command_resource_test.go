@@ -1,0 +1,220 @@
+package provider
+
+import (
+	"fmt"
+	"os"
+	"regexp"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+)
+
+// TestAccDeviceCommandResource_PushApps tests the push_apps command.
+// This is a safe, commonly-used command that pushes assigned apps to a device.
+//
+// Requirements:
+//   - SIMPLEMDM_DEVICE_ID environment variable must be set with an enrolled device ID
+//   - The device must be enrolled and active in SimpleMDM
+//
+// Note: Device commands are "one-shot" resources - they execute once during creation
+// and cannot be read back from the API. The resource only maintains local state.
+func TestAccDeviceCommandResource_PushApps(t *testing.T) {
+	testAccPreCheck(t)
+	deviceID := findFirstDeviceID(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccDeviceCommandResourceConfig(deviceID, "push_assigned_apps"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Verify the command was set correctly
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "command", "push_assigned_apps"),
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "device_id", deviceID),
+
+					// Verify the command executed successfully (202 Accepted)
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "status_code", "202"),
+
+					// Verify ID was generated
+					resource.TestCheckResourceAttrSet("simplemdm_device_command.test", "id"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccDeviceCommandResource_Refresh tests the refresh command.
+// This is a safe command that triggers a device to check in with SimpleMDM.
+//
+// Requirements:
+//   - SIMPLEMDM_DEVICE_ID environment variable must be set with an enrolled device ID
+//   - The device must be enrolled and active in SimpleMDM
+func TestAccDeviceCommandResource_Refresh(t *testing.T) {
+	testAccPreCheck(t)
+	// SimpleMDM rate-limits the refresh command per device (HTTP 429) on a
+	// schedule that can exceed our retry budget. PushApps exercises the
+	// same resource code path without that constraint; skip Refresh in CI
+	// to avoid the flake. Set SIMPLEMDM_RUN_RATE_LIMITED=1 to opt in.
+	if os.Getenv("SIMPLEMDM_RUN_RATE_LIMITED") == "" {
+		t.Skip("Refresh is rate-limited; set SIMPLEMDM_RUN_RATE_LIMITED=1 to run.")
+	}
+	deviceID := findFirstDeviceID(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccDeviceCommandResourceConfig(deviceID, "refresh"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "command", "refresh"),
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "device_id", deviceID),
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "status_code", "202"),
+					resource.TestCheckResourceAttrSet("simplemdm_device_command.test", "id"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccDeviceCommandResource_Lock tests the lock command.
+// This command locks the device screen with an optional message.
+//
+// Requirements:
+//   - SIMPLEMDM_DEVICE_ID environment variable must be set with an enrolled device ID
+//   - The device must be enrolled and active in SimpleMDM
+//   - WARNING: This will lock the device and may require physical access to unlock
+func TestAccDeviceCommandResource_Lock(t *testing.T) {
+	testAccPreCheck(t)
+	deviceID := findFirstDeviceID(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccDeviceCommandResourceConfigWithParams(
+					deviceID,
+					"lock",
+					map[string]string{
+						"message": "Test lock from Terraform provider",
+						// SimpleMDM requires a 6-digit numeric pin for the
+						// lock command. Without it the API returns
+						// "pin: is the wrong length (should be 6)".
+						"pin": "123456",
+					},
+				),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "command", "lock"),
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "device_id", deviceID),
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "status_code", "202"),
+					resource.TestCheckResourceAttrSet("simplemdm_device_command.test", "id"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccDeviceCommandResource_InvalidCommand tests that an unsupported command
+// results in an appropriate error.
+func TestAccDeviceCommandResource_InvalidCommand(t *testing.T) {
+	testAccPreCheck(t)
+	deviceID := findFirstDeviceID(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccDeviceCommandResourceConfig(deviceID, "invalid_command"),
+				ExpectError: regexp.MustCompile("Unsupported device command|not currently supported"),
+			},
+		},
+	})
+}
+
+// TestAccDeviceCommandResource_LostMode tests the enable_lost_mode command.
+// This command enables lost mode on a device with optional message and phone number.
+//
+// Requirements:
+//   - SIMPLEMDM_DEVICE_ID environment variable must be set with an enrolled device ID
+//   - The device must be enrolled, active, and support lost mode
+//   - WARNING: This will enable lost mode on the device
+func TestAccDeviceCommandResource_LostMode(t *testing.T) {
+	testAccPreCheck(t)
+	// Lost mode is only supported by supervised iOS devices. The
+	// auto-discovered device is usually macOS, so the API returns
+	// "device does not support lost mode". Skip in CI unless the user
+	// has pinned a supervised iOS device with SIMPLEMDM_DEVICE_ID.
+	if os.Getenv("SIMPLEMDM_DEVICE_ID") == "" {
+		t.Skip("Lost mode requires a supervised iOS device; set SIMPLEMDM_DEVICE_ID to a supported device to run.")
+	}
+	deviceID := findFirstDeviceID(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccDeviceCommandResourceConfigWithParams(
+					deviceID,
+					"enable_lost_mode",
+					map[string]string{
+						"message":      "Test device - lost mode enabled",
+						"phone_number": "+15555551234",
+					},
+				),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "command", "enable_lost_mode"),
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "device_id", deviceID),
+					resource.TestCheckResourceAttr("simplemdm_device_command.test", "status_code", "202"),
+					resource.TestCheckResourceAttrSet("simplemdm_device_command.test", "id"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccDeviceCommandResource_RequiredParameter tests that commands with required
+// parameters fail appropriately when the parameter is missing.
+func TestAccDeviceCommandResource_RequiredParameter(t *testing.T) {
+	testAccPreCheck(t)
+	deviceID := findFirstDeviceID(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:      testAccDeviceCommandResourceConfig(deviceID, "set_time_zone"),
+				ExpectError: regexp.MustCompile("Missing required parameter|requires parameter"),
+			},
+		},
+	})
+}
+
+// testAccDeviceCommandResourceConfig returns a test configuration for a device command
+// without parameters.
+func testAccDeviceCommandResourceConfig(deviceID, command string) string {
+	return providerConfig + fmt.Sprintf(`
+resource "simplemdm_device_command" "test" {
+  device_id = "%s"
+  command   = "%s"
+}
+`, deviceID, command)
+}
+
+// testAccDeviceCommandResourceConfigWithParams returns a test configuration for a device
+// command with parameters.
+func testAccDeviceCommandResourceConfigWithParams(deviceID, command string, params map[string]string) string {
+	config := providerConfig + fmt.Sprintf(`
+resource "simplemdm_device_command" "test" {
+  device_id = "%s"
+  command   = "%s"
+  parameters = {
+`, deviceID, command)
+
+	for key, value := range params {
+		config += fmt.Sprintf("    %s = %q\n", key, value)
+	}
+
+	config += `  }
+}
+`
+	return config
+}

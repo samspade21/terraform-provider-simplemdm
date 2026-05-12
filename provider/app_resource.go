@@ -1,21 +1,207 @@
 package provider
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+// sha256OfFile streams the file at path and returns the lowercase hex digest.
+func sha256OfFile(p string) (string, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// binaryFileShaPlanModifier governs the computed binary_file_sha256 field.
+// When state already has a sha and the binary_file path isn't changing, the
+// stored sha stays in the plan (no spurious diff). Otherwise the value is
+// marked unknown so apply can fill it. This is more permissive than
+// UseStateForUnknown, which would lock a null state value to null forever
+// and trigger "inconsistent result after apply" the first time the field
+// is populated.
+type binaryFileShaPlanModifier struct{}
+
+func (binaryFileShaPlanModifier) Description(_ context.Context) string {
+	return "Reuses the stored sha when binary_file is unchanged; otherwise marks it unknown so apply can recompute."
+}
+
+func (m binaryFileShaPlanModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (binaryFileShaPlanModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	// Read planned binary_file path first. App-store-only apps never set
+	// binary_file, so their sha is permanently null. Returning Unknown here
+	// when state is also null produces a post-apply drift ("planned Unknown
+	// but got null") on every Create for non-binary apps.
+	var planModel appResourceModel
+	if diags := req.Plan.Get(ctx, &planModel); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+	noBinary := planModel.BinaryFile.IsNull() || planModel.BinaryFile.IsUnknown() || planModel.BinaryFile.ValueString() == ""
+
+	if noBinary {
+		// No binary in plan → sha stays null forever.
+		resp.PlanValue = types.StringNull()
+		return
+	}
+
+	// State has no recorded sha yet — apply will compute it.
+	if req.StateValue.IsNull() || req.StateValue.ValueString() == "" {
+		resp.PlanValue = types.StringUnknown()
+		return
+	}
+
+	// Both state and plan have a binary. Reuse the stored sha iff the
+	// local file's content matches it, otherwise let apply recompute.
+	newSha, err := sha256OfFile(planModel.BinaryFile.ValueString())
+	if err != nil {
+		resp.PlanValue = types.StringUnknown()
+		return
+	}
+	if newSha == req.StateValue.ValueString() {
+		resp.PlanValue = req.StateValue
+		return
+	}
+	resp.PlanValue = types.StringUnknown()
+}
+
+// binaryFileContentModifier suppresses path-only diffs on binary_file. If the
+// configured path differs from state but the file's sha256 matches the last
+// recorded binary_file_sha256, the plan keeps the state value so renames of
+// identical binaries don't re-upload. A genuine content change still drives
+// a diff.
+type binaryFileContentModifier struct{}
+
+func (binaryFileContentModifier) Description(_ context.Context) string {
+	return "Suppresses diffs when binary_file path changes but the file's sha256 matches the last uploaded binary."
+}
+
+func (m binaryFileContentModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (binaryFileContentModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.StateValue.IsNull() || req.PlanValue.IsNull() || req.PlanValue.IsUnknown() {
+		return
+	}
+	if req.StateValue.Equal(req.PlanValue) {
+		return
+	}
+
+	var stateModel appResourceModel
+	diags := req.State.Get(ctx, &stateModel)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if stateModel.BinaryFileSHA.IsNull() || stateModel.BinaryFileSHA.ValueString() == "" {
+		return
+	}
+
+	newSha, err := sha256OfFile(req.PlanValue.ValueString())
+	if err != nil {
+		return
+	}
+
+	if newSha == stateModel.BinaryFileSHA.ValueString() {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+// binaryFileValidator validates that binary file paths exist and have correct extensions
+type binaryFileValidator struct{}
+
+func (v binaryFileValidator) Description(ctx context.Context) string {
+	return "value must be a path to an existing .ipa, .pkg, or .dmg file"
+}
+
+func (v binaryFileValidator) MarkdownDescription(ctx context.Context) string {
+	return "value must be a path to an existing .ipa, .pkg, or .dmg file"
+}
+
+func (v binaryFileValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+
+	path := req.ConfigValue.ValueString()
+
+	// Check file exists
+	info, err := os.Stat(path)
+	if err != nil {
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"Invalid binary file path",
+			fmt.Sprintf("File does not exist or is not accessible: %s", err),
+		)
+		return
+	}
+
+	// Check it's a file not directory
+	if info.IsDir() {
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"Invalid binary file path",
+			"Path is a directory, not a file",
+		)
+		return
+	}
+
+	// Check extension
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext != ".ipa" && ext != ".pkg" && ext != ".dmg" {
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"Invalid binary file type",
+			fmt.Sprintf("File must have .ipa, .pkg, or .dmg extension, got: %s", ext),
+		)
+		return
+	}
+
+	// Check file size (warn if > 2GB)
+	const maxSize = 2 * 1024 * 1024 * 1024
+	if info.Size() > maxSize {
+		resp.Diagnostics.AddAttributeWarning(
+			req.Path,
+			"Large binary file",
+			fmt.Sprintf("Binary file is very large (%d MB). Upload may take significant time.", info.Size()/(1024*1024)),
+		)
+	}
+}
 
 var (
 	_ resource.Resource                = &appResource{}
@@ -25,11 +211,21 @@ var (
 
 // appResourceModel maps the resource schema data.
 type appResourceModel struct {
-	Name       types.String `tfsdk:"name"`
-	ID         types.String `tfsdk:"id"`
-	AppStoreId types.String `tfsdk:"app_store_id"`
-	BundleId   types.String `tfsdk:"bundle_id"`
-	DeployTo   types.String `tfsdk:"deploy_to"`
+	Name                 types.String `tfsdk:"name"`
+	ID                   types.String `tfsdk:"id"`
+	AppStoreId           types.String `tfsdk:"app_store_id"`
+	BundleId             types.String `tfsdk:"bundle_id"`
+	BinaryFile           types.String `tfsdk:"binary_file"`
+	BinaryFileSHA        types.String `tfsdk:"binary_file_sha256"`
+	DeployTo             types.String `tfsdk:"deploy_to"`
+	Status               types.String `tfsdk:"status"`
+	AppType              types.String `tfsdk:"app_type"`
+	Version              types.String `tfsdk:"version"`
+	PlatformSupport      types.String `tfsdk:"platform_support"`
+	ProcessingStatus     types.String `tfsdk:"processing_status"`
+	InstallationChannels types.List   `tfsdk:"installation_channels"`
+	CreatedAt            types.String `tfsdk:"created_at"`
+	UpdatedAt            types.String `tfsdk:"updated_at"`
 }
 
 func AppResource() resource.Resource {
@@ -67,13 +263,17 @@ func (r *appResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				},
 			},
 			"name": schema.StringAttribute{
+				Optional:    true,
 				Computed:    true,
-				Description: "The name that SimpleMDM will use to reference this app. If left blank, SimpleMDM will automatically set this to the app name specified by the binary.",
+				Description: "The name for this app in SimpleMDM. For App Store apps, this is computed from the store. For binary uploads, you may optionally specify a name, otherwise it's extracted from the binary.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"app_store_id": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Required. The Apple App Store ID of the app to be added. Example: 1090161858.",
+				Description: "The Apple App Store ID. Required when adding App Store apps via store ID. Use either this, bundle_id, or binary_file. Example: '1090161858'",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
@@ -82,13 +282,14 @@ func (r *appResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 					stringvalidator.ExactlyOneOf(
 						path.MatchRoot("app_store_id"),
 						path.MatchRoot("bundle_id"),
+						path.MatchRoot("binary_file"),
 					),
 				},
 			},
 			"bundle_id": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Required. The bundle identifier of the Apple App Store app to be added. Example: com.myCompany.MyApp1",
+				Description: "The bundle identifier of the Apple App Store app. Required when adding App Store apps via bundle ID. Use either this, app_store_id, or binary_file. Example: com.myCompany.MyApp1",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
@@ -97,20 +298,411 @@ func (r *appResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 					stringvalidator.ExactlyOneOf(
 						path.MatchRoot("app_store_id"),
 						path.MatchRoot("bundle_id"),
+						path.MatchRoot("binary_file"),
 					),
+				},
+			},
+			"binary_file": schema.StringAttribute{
+				Optional:    true,
+				Description: "Path to app binary (ipa, pkg, or dmg) to upload. Required when managing enterprise, custom B2B, or macOS package/disk-image apps. Use either this, app_store_id, or bundle_id. Renames of the binary file with unchanged content do not trigger a re-upload — drift is tracked by sha256, surfaced as binary_file_sha256.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					binaryFileContentModifier{},
+				},
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(
+						path.MatchRoot("app_store_id"),
+						path.MatchRoot("bundle_id"),
+						path.MatchRoot("binary_file"),
+					),
+					binaryFileValidator{},
+				},
+			},
+			"binary_file_sha256": schema.StringAttribute{
+				Computed:    true,
+				Description: "SHA-256 of the most recently uploaded binary. Used to detect content drift independent of the local file path.",
+				PlanModifiers: []planmodifier.String{
+					binaryFileShaPlanModifier{},
 				},
 			},
 			"deploy_to": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Optional. Deploy the app to associated devices immediately after the app has been uploaded and processed. Possible values are none, outdated or all. Defaults to none.",
+				Description: "Deploy the app after upload. Values: 'none' (default), 'outdated' (devices with older version), 'all' (all devices). Note: Only applies during updates; create operations require subsequent update. API does not return this value, so state shows last configured value.",
 				Default:     stringdefault.StaticString("none"),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("outdated", "all"),
+					stringvalidator.OneOf("none", "outdated", "all"),
+				},
+			},
+			"status": schema.StringAttribute{
+				Computed:    true,
+				Description: "The current deployment status of the app. Note: This is a write-only parameter; API does not return this value.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"app_type": schema.StringAttribute{
+				Computed:    true,
+				Description: "The catalog classification of the app, for example app store, enterprise, or custom b2b.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"version": schema.StringAttribute{
+				Computed:    true,
+				Description: "The latest version reported by SimpleMDM for the app.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"platform_support": schema.StringAttribute{
+				Computed:    true,
+				Description: "The platform supported by the app, such as iOS or macOS.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"processing_status": schema.StringAttribute{
+				Computed:    true,
+				Description: "The current processing status of the app binary within SimpleMDM.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"installation_channels": schema.ListAttribute{
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "The deployment channels supported by the app.",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"created_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the app was added to SimpleMDM.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"updated_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the app was last updated in SimpleMDM.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
 	}
+}
+
+type appAPIResponse struct {
+	Data struct {
+		ID         int `json:"id"`
+		Attributes struct {
+			Name                 string   `json:"name"`
+			BundleIdentifier     string   `json:"bundle_identifier"`
+			AppType              string   `json:"app_type"`
+			ITunesStoreID        int      `json:"itunes_store_id"`
+			InstallationChannels []string `json:"installation_channels"`
+			PlatformSupport      string   `json:"platform_support"`
+			ProcessingStatus     string   `json:"processing_status"`
+			Version              string   `json:"version"`
+			CreatedAt            string   `json:"created_at"`
+			UpdatedAt            string   `json:"updated_at"`
+		} `json:"attributes"`
+	} `json:"data"`
+}
+
+func newAppResourceModelFromAPI(ctx context.Context, app *appAPIResponse) (appResourceModel, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	// Set computed fields using null for empty values to maintain proper Terraform semantics
+	model := appResourceModel{
+		ID:         types.StringValue(strconv.Itoa(app.Data.ID)),
+		BinaryFile: types.StringNull(),
+	}
+
+	// Handle optional/computed string fields - use null when empty
+	if app.Data.Attributes.Name != "" {
+		model.Name = types.StringValue(app.Data.Attributes.Name)
+	} else {
+		model.Name = types.StringNull()
+	}
+
+	if app.Data.Attributes.BundleIdentifier != "" {
+		model.BundleId = types.StringValue(app.Data.Attributes.BundleIdentifier)
+	} else {
+		model.BundleId = types.StringNull()
+	}
+
+	if app.Data.Attributes.AppType != "" {
+		model.AppType = types.StringValue(app.Data.Attributes.AppType)
+	} else {
+		model.AppType = types.StringNull()
+	}
+
+	if app.Data.Attributes.Version != "" {
+		model.Version = types.StringValue(app.Data.Attributes.Version)
+	} else {
+		model.Version = types.StringNull()
+	}
+
+	if app.Data.Attributes.PlatformSupport != "" {
+		model.PlatformSupport = types.StringValue(app.Data.Attributes.PlatformSupport)
+	} else {
+		model.PlatformSupport = types.StringNull()
+	}
+
+	if app.Data.Attributes.ProcessingStatus != "" {
+		model.ProcessingStatus = types.StringValue(app.Data.Attributes.ProcessingStatus)
+	} else {
+		model.ProcessingStatus = types.StringNull()
+	}
+
+	if app.Data.Attributes.CreatedAt != "" {
+		model.CreatedAt = types.StringValue(app.Data.Attributes.CreatedAt)
+	} else {
+		model.CreatedAt = types.StringNull()
+	}
+
+	if app.Data.Attributes.UpdatedAt != "" {
+		model.UpdatedAt = types.StringValue(app.Data.Attributes.UpdatedAt)
+	} else {
+		model.UpdatedAt = types.StringNull()
+	}
+
+	// Handle AppStoreId
+	if app.Data.Attributes.ITunesStoreID != 0 {
+		model.AppStoreId = types.StringValue(strconv.Itoa(app.Data.Attributes.ITunesStoreID))
+	} else {
+		model.AppStoreId = types.StringNull()
+	}
+
+	// DeployTo and Status are write-only parameters that API does not return
+	// Preserve from plan/state as they are not provided by API
+	model.DeployTo = types.StringValue("none")
+	model.Status = types.StringNull()
+
+	// Validate bundle_identifier is present (should always be returned by API)
+	if app.Data.Attributes.BundleIdentifier == "" {
+		diags.AddWarning(
+			"Missing bundle_identifier",
+			fmt.Sprintf("App %d returned by API without bundle_identifier", app.Data.ID),
+		)
+	}
+
+	// Validate app_type is a known value
+	knownAppTypes := map[string]bool{
+		"app store":  true,
+		"enterprise": true,
+		"custom b2b": true,
+		"custom":     true,
+		"shared":     true,
+	}
+	if app.Data.Attributes.AppType != "" && !knownAppTypes[app.Data.Attributes.AppType] {
+		diags.AddWarning(
+			"Unknown app type",
+			fmt.Sprintf("App returned unexpected app_type: %s", app.Data.Attributes.AppType),
+		)
+	}
+
+	// Validate platform_support is a known value
+	knownPlatforms := map[string]bool{
+		"iOS":   true,
+		"macOS": true,
+	}
+	if app.Data.Attributes.PlatformSupport != "" && !knownPlatforms[app.Data.Attributes.PlatformSupport] {
+		diags.AddWarning(
+			"Unknown platform",
+			fmt.Sprintf("App returned unexpected platform_support: %s", app.Data.Attributes.PlatformSupport),
+		)
+	}
+
+	// Handle installation channels
+	if len(app.Data.Attributes.InstallationChannels) > 0 {
+		listValue, listDiags := types.ListValueFrom(ctx, types.StringType, app.Data.Attributes.InstallationChannels)
+		diags.Append(listDiags...)
+		if !listDiags.HasError() {
+			model.InstallationChannels = listValue
+		}
+	} else {
+		model.InstallationChannels = types.ListNull(types.StringType)
+	}
+
+	return model, diags
+}
+
+func fetchApp(ctx context.Context, client *simplemdm.Client, appID string) (*appAPIResponse, error) {
+	url := fmt.Sprintf("https://%s/api/v1/apps/%s", client.HostName, appID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := client.RequestResponse200(req)
+	if err != nil {
+		return nil, err
+	}
+
+	app := appAPIResponse{}
+	if err := json.Unmarshal(body, &app); err != nil {
+		return nil, err
+	}
+
+	return &app, nil
+}
+
+// isNotFoundError reports whether err looks like a 404 from the SimpleMDM
+// API. Used by data sources / resources to remove gone records from state
+// instead of erroring on the next plan.
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "404") || strings.Contains(msg, "not found")
+}
+
+// waitForProcessingComplete polls until app processing is complete
+func waitForProcessingComplete(ctx context.Context, client *simplemdm.Client, appID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if time.Now().After(deadline) {
+				return fmt.Errorf("timeout waiting for app processing to complete after %v", timeout)
+			}
+
+			app, err := fetchApp(ctx, client, appID)
+			if err != nil {
+				return fmt.Errorf("error checking processing status: %w", err)
+			}
+
+			if app.Data.Attributes.ProcessingStatus == "processed" {
+				return nil
+			}
+
+			// If processing failed, return error
+			if app.Data.Attributes.ProcessingStatus == "failed" {
+				return fmt.Errorf("app processing failed")
+			}
+		}
+	}
+}
+
+func (r *appResource) appCreateWithBinary(ctx context.Context, binaryPath, name string) (_ *simplemdm.SimplemdmDefaultStruct, err error) {
+	file, err := os.Open(binaryPath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to open app binary %q: %w", binaryPath, err)
+	}
+	defer func() {
+		if cerr := file.Close(); err == nil && cerr != nil {
+			err = fmt.Errorf("unable to close app binary %q: %w", binaryPath, cerr)
+		}
+	}()
+
+	payload := &bytes.Buffer{}
+	writer := multipart.NewWriter(payload)
+
+	part, err := writer.CreateFormFile("binary", filepath.Base(binaryPath))
+	if err != nil {
+		return nil, fmt.Errorf("unable to create app binary form data: %w", err)
+	}
+
+	if _, err := io.Copy(part, file); err != nil {
+		return nil, fmt.Errorf("unable to read app binary %q: %w", binaryPath, err)
+	}
+
+	if name != "" {
+		if err := writer.WriteField("name", name); err != nil {
+			return nil, fmt.Errorf("unable to encode app name: %w", err)
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("unable to finalize app upload payload: %w", err)
+	}
+
+	url := fmt.Sprintf("https://%s/api/v1/apps", r.client.HostName)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, payload)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	body, err := r.client.RequestResponse201(req)
+	if err != nil {
+		return nil, err
+	}
+
+	app := simplemdm.SimplemdmDefaultStruct{}
+	if err := json.Unmarshal(body, &app); err != nil {
+		return nil, err
+	}
+
+	return &app, nil
+}
+
+func (r *appResource) appUpdateWithBinary(ctx context.Context, appID, binaryPath, name, deployTo string) (err error) {
+	file, err := os.Open(binaryPath)
+	if err != nil {
+		return fmt.Errorf("unable to open app binary %q: %w", binaryPath, err)
+	}
+	defer func() {
+		if cerr := file.Close(); err == nil && cerr != nil {
+			err = fmt.Errorf("unable to close app binary %q: %w", binaryPath, cerr)
+		}
+	}()
+
+	payload := &bytes.Buffer{}
+	writer := multipart.NewWriter(payload)
+
+	part, err := writer.CreateFormFile("binary", filepath.Base(binaryPath))
+	if err != nil {
+		return fmt.Errorf("unable to create app binary form data: %w", err)
+	}
+
+	if _, err := io.Copy(part, file); err != nil {
+		return fmt.Errorf("unable to read app binary %q: %w", binaryPath, err)
+	}
+
+	if name != "" {
+		if err := writer.WriteField("name", name); err != nil {
+			return fmt.Errorf("unable to encode app name: %w", err)
+		}
+	}
+
+	if deployTo != "" {
+		if err := writer.WriteField("deploy_to", deployTo); err != nil {
+			return fmt.Errorf("unable to encode deploy_to value: %w", err)
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("unable to finalize app update payload: %w", err)
+	}
+
+	url := fmt.Sprintf("https://%s/api/v1/apps/%s", r.client.HostName, appID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, payload)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	_, err = r.client.RequestResponse200(req)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *appResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -127,7 +719,7 @@ func (r *appResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	var appStoreId, bundleId, name string
+	var appStoreId, bundleId, name, binaryPath string
 	if !plan.AppStoreId.IsNull() {
 		appStoreId = plan.AppStoreId.ValueString()
 	}
@@ -137,34 +729,96 @@ func (r *appResource) Create(ctx context.Context, req resource.CreateRequest, re
 	if !plan.Name.IsNull() {
 		name = plan.Name.ValueString()
 	}
+	if !plan.BinaryFile.IsNull() {
+		binaryPath = plan.BinaryFile.ValueString()
+	}
 
 	// Generate API request body from plan
-	app, err := r.client.AppCreate(
-		appStoreId,
-		bundleId,
-		name,
-	)
+	var app *simplemdm.SimplemdmDefaultStruct
+	var err error
+
+	switch {
+	case binaryPath != "":
+		app, err = r.appCreateWithBinary(ctx, binaryPath, name)
+	default:
+		app, err = r.client.AppCreate(
+			appStoreId,
+			bundleId,
+			name,
+		)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error creating app",
-			"Could not create app, unexpected error: "+err.Error(),
+			"Failed to create app",
+			fmt.Sprintf("Could not create app: %v", err),
 		)
 		return
 	}
 
-	plan.ID = types.StringValue(strconv.Itoa(app.Data.ID))
+	appID := strconv.Itoa(app.Data.ID)
 
-	if app.Data.Attributes.AppStoreId != 0 {
-		plan.AppStoreId = types.StringValue(strconv.Itoa(app.Data.Attributes.AppStoreId))
-	}
-	if app.Data.Attributes.BundleId != "" {
-		plan.BundleId = types.StringValue(app.Data.Attributes.BundleId)
-	}
-	if app.Data.Attributes.Name != "" {
-		plan.Name = types.StringValue(app.Data.Attributes.Name)
+	// If binary was uploaded, wait for processing to complete
+	if binaryPath != "" {
+		err = waitForProcessingComplete(ctx, r.client, appID, 15*time.Minute)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to complete app processing",
+				fmt.Sprintf("App binary upload succeeded but processing did not complete: %v", err),
+			)
+			return
+		}
 	}
 
-	diags = resp.State.Set(ctx, plan)
+	// If deploy_to specified at creation time, SimpleMDM requires a follow-up update.
+	if !plan.DeployTo.IsNull() && plan.DeployTo.ValueString() != "" && plan.DeployTo.ValueString() != "none" {
+		_, err = r.client.AppUpdate(appID, name, plan.DeployTo.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to configure deploy_to",
+				fmt.Sprintf("Could not set deploy_to during app creation: %v", err),
+			)
+			return
+		}
+	}
+
+	apiApp, err := fetchApp(ctx, r.client, appID)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Failed to read created app",
+			fmt.Sprintf("Unable to read app %s after creation: %v", appID, err),
+		)
+		return
+	}
+
+	newState, diagsFromAPI := newAppResourceModelFromAPI(ctx, apiApp)
+	resp.Diagnostics.Append(diagsFromAPI...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Preserve input-only fields that API doesn't return
+	// DeployTo is write-only and preserved from plan since API doesn't return it
+	if !plan.DeployTo.IsNull() {
+		newState.DeployTo = plan.DeployTo
+	}
+	// BinaryFile is input-only and should be preserved from plan
+	if !plan.BinaryFile.IsNull() {
+		newState.BinaryFile = plan.BinaryFile
+		sha, err := sha256OfFile(plan.BinaryFile.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddWarning(
+				"Could not hash binary_file",
+				fmt.Sprintf("Drift detection on binary content will be unavailable for this app until next apply: %v", err),
+			)
+			newState.BinaryFileSHA = types.StringNull()
+		} else {
+			newState.BinaryFileSHA = types.StringValue(sha)
+		}
+	} else {
+		newState.BinaryFileSHA = types.StringNull()
+	}
+
+	diags = resp.State.Set(ctx, newState)
 	resp.Diagnostics.Append(diags...)
 }
 
@@ -181,8 +835,8 @@ func (r *appResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error Deleting SimpleMDM app",
-			"Could not delete app, unexpected error: "+err.Error(),
+			"Failed to delete app",
+			fmt.Sprintf("Could not delete app %s: %v", state.ID.ValueString(), err),
 		)
 		return
 	}
@@ -196,30 +850,32 @@ func (r *appResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	app, err := r.client.AppGet(state.ID.ValueString())
+	app, err := fetchApp(ctx, r.client, state.ID.ValueString())
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
 		resp.Diagnostics.AddError(
-			"Error Reading SimpleMDM App",
-			"Could not read SimpleMDM App "+state.ID.ValueString()+": "+err.Error(),
+			"Failed to read app",
+			fmt.Sprintf("Unable to read app %s: %v", state.ID.ValueString(), err),
 		)
 		return
 	}
 
-	state.ID = types.StringValue(strconv.Itoa(app.Data.ID))
-	state.Name = types.StringValue(app.Data.Attributes.Name)
-
-	if app.Data.Attributes.AppStoreId != 0 {
-		state.AppStoreId = types.StringValue(strconv.Itoa(app.Data.Attributes.AppStoreId))
-	}
-	if app.Data.Attributes.BundleId != "" {
-		state.BundleId = types.StringValue(app.Data.Attributes.BundleId)
+	newState, diagsFromAPI := newAppResourceModelFromAPI(ctx, app)
+	resp.Diagnostics.Append(diagsFromAPI...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	diags = resp.State.Set(ctx, &state)
+	if !state.BinaryFile.IsNull() {
+		newState.BinaryFile = state.BinaryFile
+	}
+	// API doesn't return the sha; preserve what we recorded on last upload.
+	newState.BinaryFileSHA = state.BinaryFileSHA
+
+	diags = resp.State.Set(ctx, &newState)
 	resp.Diagnostics.Append(diags...)
 }
 
@@ -237,19 +893,96 @@ func (r *appResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	_, err := r.client.AppUpdate(
-		plan.ID.ValueString(),
-		plan.Name.ValueString(),
-		plan.DeployTo.ValueString(),
-	)
+	appID := plan.ID.ValueString()
+
+	name := ""
+	if !plan.Name.IsNull() {
+		name = plan.Name.ValueString()
+	}
+
+	deployTo := ""
+	if !plan.DeployTo.IsNull() {
+		deployTo = plan.DeployTo.ValueString()
+	}
+
+	// Re-upload the binary only when its content actually changed. The
+	// plan modifier on binary_file keeps plan == state when the local file's
+	// sha matches binary_file_sha256, so a path-only rename of an unchanged
+	// binary lands here as a metadata-only update.
+	binaryContentChanged := !plan.BinaryFile.IsNull() && plan.BinaryFile.ValueString() != "" &&
+		(state.BinaryFile.IsNull() || plan.BinaryFile.ValueString() != state.BinaryFile.ValueString())
+
+	if binaryContentChanged {
+		err := r.appUpdateWithBinary(ctx, appID, plan.BinaryFile.ValueString(), name, deployTo)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to update app binary",
+				fmt.Sprintf("Could not upload new binary: %v", err),
+			)
+			return
+		}
+
+		// Wait for binary processing to complete
+		err = waitForProcessingComplete(ctx, r.client, appID, 15*time.Minute)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to complete app processing",
+				fmt.Sprintf("App binary update succeeded but processing did not complete: %v", err),
+			)
+			return
+		}
+	} else {
+		_, err := r.client.AppUpdate(
+			appID,
+			name,
+			deployTo,
+		)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Failed to update app",
+				fmt.Sprintf("Could not update app: %v", err),
+			)
+			return
+		}
+	}
+
+	apiApp, err := fetchApp(ctx, r.client, appID)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error updating app",
-			"Failed to update app: "+err.Error(),
+			"Failed to read updated app",
+			fmt.Sprintf("Unable to refresh app %s state after update: %v", appID, err),
 		)
 		return
 	}
 
-	diags = resp.State.Set(ctx, plan)
+	newState, diagsFromAPI := newAppResourceModelFromAPI(ctx, apiApp)
+	resp.Diagnostics.Append(diagsFromAPI...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Preserve input-only fields that API doesn't return
+	// DeployTo is write-only and preserved from plan since API doesn't return it
+	if !plan.DeployTo.IsNull() {
+		newState.DeployTo = plan.DeployTo
+	}
+	// BinaryFile is input-only and should be preserved from plan
+	if !plan.BinaryFile.IsNull() {
+		newState.BinaryFile = plan.BinaryFile
+		sha, err := sha256OfFile(plan.BinaryFile.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddWarning(
+				"Could not hash binary_file",
+				fmt.Sprintf("Drift detection on binary content will be unavailable for this app until next apply: %v", err),
+			)
+			newState.BinaryFileSHA = state.BinaryFileSHA
+		} else {
+			newState.BinaryFileSHA = types.StringValue(sha)
+		}
+	} else {
+		newState.BinaryFileSHA = types.StringNull()
+	}
+
+	diags = resp.State.Set(ctx, newState)
 	resp.Diagnostics.Append(diags...)
 }

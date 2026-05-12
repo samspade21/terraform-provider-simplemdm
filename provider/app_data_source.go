@@ -2,10 +2,11 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"strconv"
+	"net/http"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -19,8 +20,20 @@ var (
 
 // appDataSourceModel maps the data source schema data.
 type appDataSourceModel struct {
-	ID   types.String `tfsdk:"id"`
-	Name types.String `tfsdk:"name"`
+	ID                   types.String `tfsdk:"id"`
+	Name                 types.String `tfsdk:"name"`
+	AppStoreId           types.String `tfsdk:"app_store_id"`
+	BundleId             types.String `tfsdk:"bundle_id"`
+	DeployTo             types.String `tfsdk:"deploy_to"`
+	Status               types.String `tfsdk:"status"`
+	AppType              types.String `tfsdk:"app_type"`
+	Version              types.String `tfsdk:"version"`
+	PlatformSupport      types.String `tfsdk:"platform_support"`
+	ProcessingStatus     types.String `tfsdk:"processing_status"`
+	InstallationChannels types.List   `tfsdk:"installation_channels"`
+	CreatedAt            types.String `tfsdk:"created_at"`
+	UpdatedAt            types.String `tfsdk:"updated_at"`
+	IncludeShared        types.Bool   `tfsdk:"include_shared"`
 }
 
 // appDataSource is a helper function to simplify the provider implementation.
@@ -47,9 +60,58 @@ func (d *appDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, re
 				Computed:    true,
 				Description: "The name of the attribute.",
 			},
+			"app_store_id": schema.StringAttribute{
+				Computed:    true,
+				Description: "The Apple App Store ID associated with the app.",
+			},
+			"bundle_id": schema.StringAttribute{
+				Computed:    true,
+				Description: "The bundle identifier of the app.",
+			},
+			"app_type": schema.StringAttribute{
+				Computed:    true,
+				Description: "The catalog classification of the app, for example app store, enterprise, or custom b2b.",
+			},
+			"version": schema.StringAttribute{
+				Computed:    true,
+				Description: "The latest version reported by SimpleMDM for the app.",
+			},
+			"platform_support": schema.StringAttribute{
+				Computed:    true,
+				Description: "The platform supported by the app, such as iOS or macOS.",
+			},
+			"processing_status": schema.StringAttribute{
+				Computed:    true,
+				Description: "The current processing status of the app binary within SimpleMDM.",
+			},
+			"installation_channels": schema.ListAttribute{
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "The deployment channels supported by the app.",
+			},
+			"created_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the app was added to SimpleMDM.",
+			},
+			"updated_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the app was last updated in SimpleMDM.",
+			},
+			"deploy_to": schema.StringAttribute{
+				Computed:    true,
+				Description: "Where the app is deployed (none, outdated, or all).",
+			},
+			"status": schema.StringAttribute{
+				Computed:    true,
+				Description: "The current deployment status of the app.",
+			},
 			"id": schema.StringAttribute{
 				Required:    true,
 				Description: "The ID of the attribute.",
+			},
+			"include_shared": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Include apps from the SimpleMDM shared catalog. When set to true, the data source will query apps available in the shared catalog in addition to account-specific apps. Defaults to false.",
 			},
 		},
 	}
@@ -61,26 +123,77 @@ func (d *appDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 	diags := req.Config.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
-	app, err := d.client.AppGet(state.ID.ValueString())
+	app, err := fetchAppWithParams(ctx, d.client, state.ID.ValueString(), state.IncludeShared)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to Read SimpleMDM app",
-			err.Error(),
-		)
+		if isNotFoundError(err) {
+			resp.Diagnostics.AddError(
+				"SimpleMDM app not found",
+				fmt.Sprintf("The app with ID %s was not found. It may have been deleted.", state.ID.ValueString()),
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				"Unable to Read SimpleMDM app",
+				err.Error(),
+			)
+		}
 		return
 	}
 
 	// Map response body to model
-	state.Name = types.StringValue(app.Data.Attributes.Name)
-	state.ID = types.StringValue(strconv.Itoa(app.Data.ID))
+	resourceModel, diags := newAppResourceModelFromAPI(ctx, app)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	state.ID = resourceModel.ID
+	state.Name = resourceModel.Name
+	state.AppStoreId = resourceModel.AppStoreId
+	state.BundleId = resourceModel.BundleId
+	state.DeployTo = resourceModel.DeployTo
+	state.Status = resourceModel.Status
+	state.AppType = resourceModel.AppType
+	state.Version = resourceModel.Version
+	state.PlatformSupport = resourceModel.PlatformSupport
+	state.ProcessingStatus = resourceModel.ProcessingStatus
+	state.InstallationChannels = resourceModel.InstallationChannels
+	state.CreatedAt = resourceModel.CreatedAt
+	state.UpdatedAt = resourceModel.UpdatedAt
 
 	// Set state
-
 	diags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+}
+
+// fetchAppWithParams fetches an app with optional query parameters
+func fetchAppWithParams(ctx context.Context, client *simplemdm.Client, appID string, includeShared types.Bool) (*appAPIResponse, error) {
+	url := fmt.Sprintf("https://%s/api/v1/apps/%s", client.HostName, appID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add query parameters if include_shared is explicitly set to true
+	if !includeShared.IsNull() && includeShared.ValueBool() {
+		q := req.URL.Query()
+		q.Add("include_shared", "true")
+		req.URL.RawQuery = q.Encode()
+	}
+
+	body, err := client.RequestResponse200(req)
+	if err != nil {
+		return nil, err
+	}
+
+	app := appAPIResponse{}
+	if err := json.Unmarshal(body, &app); err != nil {
+		return nil, err
+	}
+
+	return &app, nil
 }
 
 // Configure adds the provider configured client to the data source.

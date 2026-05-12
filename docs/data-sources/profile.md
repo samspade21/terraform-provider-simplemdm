@@ -3,18 +3,39 @@
 page_title: "simplemdm_profile Data Source - simplemdm"
 subcategory: ""
 description: |-
-  Profile data source can be used together with Device(s), Assignment Group(s) or Device Group(s) to assign profiles to these objects.
+  Profile data source can be used to reference existing configuration profiles in SimpleMDM. Profiles represent both built-in and custom configuration profiles.
 ---
 
 # simplemdm_profile (Data Source)
 
-Profile data source can be used together with Device(s), Assignment Group(s) or Device Group(s) to assign profiles to these objects.
+Profile data source can be used to reference existing configuration profiles in SimpleMDM. Profiles represent both built-in and custom configuration profiles.
 
 ## Example Usage
 
 ```terraform
 data "simplemdm_profile" "profile" {
   id = "123456"
+}
+```
+
+```terraform
+# Advanced Example - Use predefined profile in assignment group
+data "simplemdm_profile" "company_wifi" {
+  id = "123456"
+}
+
+resource "simplemdm_assignmentgroup" "all_devices" {
+  name     = "Company Devices"
+  profiles = [data.simplemdm_profile.company_wifi.id]
+}
+
+output "profile_info" {
+  description = "WiFi profile information"
+  value = {
+    id   = data.simplemdm_profile.company_wifi.id
+    name = data.simplemdm_profile.company_wifi.name
+    type = data.simplemdm_profile.company_wifi.type
+  }
 }
 ```
 
@@ -27,4 +48,11 @@ data "simplemdm_profile" "profile" {
 
 ### Read-Only
 
+- `device_count` (Number) Number of devices currently assigned to the profile.
+- `group_count` (Number) Number of device groups currently assigned to the profile.
+- `group_ids` (Set of String) IDs of device or assignment groups currently assigned to the profile.
 - `name` (String) The name of the Profile.
+- `profile_identifier` (String) The identifier contained within the profile payload.
+- `reinstall_after_os_update` (Boolean) Whether the profile reinstalls automatically after macOS updates.
+- `type` (String) The profile payload type (e.g., 'apn', 'email', 'app_restrictions', 'custom_configuration_profile').
+- `user_scope` (Boolean) Indicates if the profile is installed in the user scope.

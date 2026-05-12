@@ -1,0 +1,603 @@
+package provider
+
+import (
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+)
+
+type ResourceDefinition struct {
+	TypeName      string
+	Factory       func() resource.Resource
+	DocsPath      string
+	ExampleDirs   []string
+	TestFiles     []string
+	APIEndpoints  []string
+	TestsOptional bool
+}
+
+type DataSourceDefinition struct {
+	TypeName     string
+	Factory      func() datasource.DataSource
+	DocsPath     string
+	ExampleDirs  []string
+	TestFiles    []string
+	APIEndpoints []string
+}
+
+var resourceDefinitions = []ResourceDefinition{
+	{
+		TypeName:     "simplemdm_account",
+		Factory:      AccountResource,
+		DocsPath:     "docs/resources/account.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_account"},
+		TestFiles:    []string{"provider/account_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/account"},
+	},
+	{
+		TypeName:     "simplemdm_app",
+		Factory:      AppResource,
+		DocsPath:     "docs/resources/app.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_app"},
+		TestFiles:    []string{"provider/app_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/apps"},
+	},
+	{
+		TypeName:     "simplemdm_attribute",
+		Factory:      AttributeResource,
+		DocsPath:     "docs/resources/attribute.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_attribute"},
+		TestFiles:    []string{"provider/attribute_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/custom_attributes"},
+	},
+	{
+		TypeName:     "simplemdm_assignmentgroup",
+		Factory:      AssignmentGroupResource,
+		DocsPath:     "docs/resources/assignmentgroup.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_assignmentgroup"},
+		TestFiles:    []string{"provider/assignmentGroup_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/assignment_groups"},
+	},
+	{
+		TypeName:     "simplemdm_customprofile",
+		Factory:      CustomProfileResource,
+		DocsPath:     "docs/resources/customprofile.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_customprofile"},
+		TestFiles:    []string{"provider/customProfile_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/custom_configuration_profiles"},
+	},
+	{
+		TypeName:     "simplemdm_customdeclaration",
+		Factory:      CustomDeclarationResource,
+		DocsPath:     "docs/resources/customdeclaration.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_customdeclaration"},
+		TestFiles:    []string{"provider/customDeclaration_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/custom_declarations"},
+	},
+	{
+		TypeName:      "simplemdm_customdeclaration_device_assignment",
+		Factory:       CustomDeclarationDeviceAssignmentResource,
+		DocsPath:      "docs/resources/customdeclaration_device_assignment.md",
+		ExampleDirs:   []string{"examples/resources/simplemdm_customdeclaration_device_assignment"},
+		TestFiles:     []string{"provider/customDeclaration_device_assignment_resource_test.go"},
+		APIEndpoints:  []string{"/api/v1/custom_declarations/{custom_declaration_id}/devices/{device_id}"},
+		TestsOptional: true,
+	},
+	{
+		TypeName:     "simplemdm_assignmentgroup_profile_binding",
+		Factory:      AssignmentGroupProfileBindingResource,
+		DocsPath:     "docs/resources/assignmentgroup_profile_binding.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_assignmentgroup_profile_binding"},
+		TestFiles:    []string{"provider/assignmentgroup_bindings_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/assignment_groups/{assignment_group_id}/profiles/{profile_id}"},
+	},
+	{
+		TypeName:     "simplemdm_assignmentgroup_app_binding",
+		Factory:      AssignmentGroupAppBindingResource,
+		DocsPath:     "docs/resources/assignmentgroup_app_binding.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_assignmentgroup_app_binding"},
+		TestFiles:    []string{"provider/assignmentgroup_bindings_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/assignment_groups/{assignment_group_id}/apps/{app_id}"},
+	},
+	{
+		TypeName:     "simplemdm_device",
+		Factory:      DeviceResource,
+		DocsPath:     "docs/resources/device.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_device"},
+		TestFiles:    []string{"provider/device_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/devices"},
+	},
+	{
+		TypeName:    "simplemdm_device_command",
+		Factory:     DeviceCommandResource,
+		DocsPath:    "docs/resources/device_command.md",
+		ExampleDirs: []string{"examples/resources/simplemdm_device_command"},
+		TestFiles:   []string{"provider/device_command_resource_test.go"},
+		APIEndpoints: []string{
+			"/api/v1/devices/{DEVICE_ID}/push_apps",
+			"/api/v1/devices/{DEVICE_ID}/refresh",
+			"/api/v1/devices/{DEVICE_ID}/restart",
+			"/api/v1/devices/{DEVICE_ID}/shutdown",
+			"/api/v1/devices/{DEVICE_ID}/lock",
+			"/api/v1/devices/{DEVICE_ID}/clear_passcode",
+			"/api/v1/devices/{DEVICE_ID}/clear_firmware_password",
+			"/api/v1/devices/{DEVICE_ID}/rotate_firmware_password",
+			"/api/v1/devices/{DEVICE_ID}/clear_recovery_lock_password",
+			"/api/v1/devices/{DEVICE_ID}/clear_restrictions_password",
+			"/api/v1/devices/{DEVICE_ID}/rotate_recovery_lock_password",
+			"/api/v1/devices/{DEVICE_ID}/rotate_filevault_key",
+			"/api/v1/devices/{DEVICE_ID}/set_admin_password",
+			"/api/v1/devices/{DEVICE_ID}/rotate_admin_password",
+			"/api/v1/devices/{DEVICE_ID}/wipe",
+			"/api/v1/devices/{DEVICE_ID}/update_os",
+			"/api/v1/devices/{DEVICE_ID}/remote_desktop",
+			"/api/v1/devices/{DEVICE_ID}/bluetooth",
+			"/api/v1/devices/{DEVICE_ID}/set_time_zone",
+			"/api/v1/devices/{DEVICE_ID}/unenroll",
+			"/api/v1/devices/{DEVICE_ID}/users/{USER_ID}",
+		},
+		TestsOptional: true,
+	},
+	{
+		TypeName:    "simplemdm_enrollment",
+		Factory:     EnrollmentResource,
+		DocsPath:    "docs/resources/enrollment.md",
+		ExampleDirs: []string{"examples/resources/simplemdm_enrollment"},
+		TestFiles: []string{
+			"provider/enrollment_resource_test.go",
+		},
+		APIEndpoints: []string{
+			"/api/v1/enrollments",
+			"/api/v1/enrollments/{enrollment_id}/invitations",
+		},
+	},
+	{
+		TypeName:     "simplemdm_script",
+		Factory:      ScriptResource,
+		DocsPath:     "docs/resources/script.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_script"},
+		TestFiles:    []string{"provider/script_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/scripts"},
+	},
+	{
+		TypeName:     "simplemdm_scriptjob",
+		Factory:      ScriptJobResource,
+		DocsPath:     "docs/resources/scriptjob.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_scriptjob"},
+		TestFiles:    []string{"provider/scriptJob_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/script_jobs"},
+	},
+	{
+		TypeName:     "simplemdm_managed_config",
+		Factory:      ManagedConfigResource,
+		DocsPath:     "docs/resources/managed_config.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_managed_config"},
+		TestFiles:    []string{"provider/managedConfig_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/apps/{APP_ID}/managed_configs", "/api/v1/apps/{APP_ID}/managed_configs/push"},
+	},
+	{
+		TypeName:      "simplemdm_dep_server_sync",
+		Factory:       DepServerSyncResource,
+		DocsPath:      "docs/resources/dep_server_sync.md",
+		ExampleDirs:   []string{"examples/resources/simplemdm_dep_server_sync"},
+		TestFiles:     []string{"provider/dep_server_sync_resource_test.go"},
+		APIEndpoints:  []string{"/api/v1/dep_servers/{DEP_SERVER_ID}/sync"},
+		TestsOptional: true,
+	},
+	{
+		TypeName:      "simplemdm_device_custom_attribute_value",
+		Factory:       DeviceCustomAttributeValueResource,
+		DocsPath:      "docs/resources/device_custom_attribute_value.md",
+		ExampleDirs:   []string{"examples/resources/simplemdm_device_custom_attribute_value"},
+		TestFiles:     []string{"provider/device_custom_attribute_value_resource_test.go"},
+		APIEndpoints:  []string{"/api/v1/devices/{DEVICE_ID}/custom_attribute_values/{CUSTOM_ATTRIBUTE_ID}"},
+		TestsOptional: true,
+	},
+	{
+		TypeName:     "simplemdm_assignmentgroup_custom_attribute_value",
+		Factory:      AssignmentGroupCustomAttributeValueResource,
+		DocsPath:     "docs/resources/assignmentgroup_custom_attribute_value.md",
+		ExampleDirs:  []string{"examples/resources/simplemdm_assignmentgroup_custom_attribute_value"},
+		TestFiles:    []string{"provider/assignmentgroup_custom_attribute_value_resource_test.go"},
+		APIEndpoints: []string{"/api/v1/assignment_groups/{ASSIGNMENT_GROUP_ID}/custom_attribute_values/{CUSTOM_ATTRIBUTE_ID}"},
+	},
+	{
+		TypeName:      "simplemdm_custom_attribute_bulk_value",
+		Factory:       CustomAttributeBulkValueResource,
+		DocsPath:      "docs/resources/custom_attribute_bulk_value.md",
+		ExampleDirs:   []string{"examples/resources/simplemdm_custom_attribute_bulk_value"},
+		TestFiles:     []string{"provider/custom_attribute_bulk_value_resource_test.go"},
+		APIEndpoints:  []string{"/api/v1/custom_attribute_values/{ATTRIBUTE_NAME}"},
+		TestsOptional: true,
+	},
+	{
+		TypeName:      "simplemdm_push_certificate",
+		Factory:       PushCertificateResource,
+		DocsPath:      "docs/resources/push_certificate.md",
+		ExampleDirs:   []string{"examples/resources/simplemdm_push_certificate"},
+		TestFiles:     []string{"provider/push_certificate_resource_test.go"},
+		APIEndpoints:  []string{"/api/v1/push_certificate"},
+		TestsOptional: true,
+	},
+	{
+		TypeName:    "simplemdm_installed_app_action",
+		Factory:     InstalledAppActionResource,
+		DocsPath:    "docs/resources/installed_app_action.md",
+		ExampleDirs: []string{"examples/resources/simplemdm_installed_app_action"},
+		TestFiles:   []string{"provider/installed_app_action_resource_test.go"},
+		APIEndpoints: []string{
+			"/api/v1/installed_apps/{INSTALLED_APP_ID}/update",
+			"/api/v1/installed_apps/{INSTALLED_APP_ID}/request_management",
+			"/api/v1/installed_apps/{INSTALLED_APP_ID}",
+		},
+		TestsOptional: true,
+	},
+	{
+		TypeName:      "simplemdm_munki_pkginfo",
+		Factory:       MunkiPkgInfoResource,
+		DocsPath:      "docs/resources/munki_pkginfo.md",
+		ExampleDirs:   []string{"examples/resources/simplemdm_munki_pkginfo"},
+		TestFiles:     []string{"provider/munki_pkginfo_resource_test.go"},
+		APIEndpoints:  []string{"/api/v1/apps/{APP_ID}/munki_pkginfo"},
+		TestsOptional: true,
+	},
+	{
+		TypeName:      "simplemdm_device_custom_attribute_values",
+		Factory:       DeviceCustomAttributeValuesResource,
+		DocsPath:      "docs/resources/device_custom_attribute_values.md",
+		ExampleDirs:   []string{"examples/resources/simplemdm_device_custom_attribute_values"},
+		TestFiles:     []string{"provider/device_custom_attribute_values_resource_test.go"},
+		APIEndpoints:  []string{"/api/v1/devices/{DEVICE_ID}/custom_attribute_values"},
+		TestsOptional: true,
+	},
+}
+
+var dataSourceDefinitions = []DataSourceDefinition{
+	{
+		TypeName:     "simplemdm_account",
+		Factory:      AccountDataSource,
+		DocsPath:     "docs/data-sources/account.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_account"},
+		TestFiles:    []string{"provider/account_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/account"},
+	},
+	{
+		TypeName:     "simplemdm_dep_server",
+		Factory:      DepServerDataSource,
+		DocsPath:     "docs/data-sources/dep_server.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_dep_server"},
+		TestFiles:    []string{"provider/dep_server_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/dep_servers/{DEP_SERVER_ID}"},
+	},
+	{
+		TypeName:     "simplemdm_dep_servers",
+		Factory:      DepServersDataSource,
+		DocsPath:     "docs/data-sources/dep_servers.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_dep_servers"},
+		TestFiles:    []string{"provider/dep_servers_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/dep_servers"},
+	},
+	{
+		TypeName:     "simplemdm_dep_devices",
+		Factory:      DepDevicesDataSource,
+		DocsPath:     "docs/data-sources/dep_devices.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_dep_devices"},
+		TestFiles:    []string{"provider/dep_devices_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/dep_servers/{DEP_SERVER_ID}/dep_devices"},
+	},
+	{
+		TypeName:     "simplemdm_dep_device",
+		Factory:      DepDeviceDataSource,
+		DocsPath:     "docs/data-sources/dep_device.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_dep_device"},
+		TestFiles:    []string{"provider/dep_device_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/dep_servers/{DEP_SERVER_ID}/dep_devices/{DEP_DEVICE_ID}"},
+	},
+	{
+		TypeName:     "simplemdm_logs",
+		Factory:      LogsDataSource,
+		DocsPath:     "docs/data-sources/logs.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_logs"},
+		TestFiles:    []string{"provider/logs_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/logs"},
+	},
+	{
+		TypeName:     "simplemdm_log",
+		Factory:      LogDataSource,
+		DocsPath:     "docs/data-sources/log.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_log"},
+		TestFiles:    []string{"provider/log_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/logs/{LOG_ID}"},
+	},
+	{
+		TypeName:     "simplemdm_push_certificate",
+		Factory:      PushCertificateDataSource,
+		DocsPath:     "docs/data-sources/push_certificate.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_push_certificate"},
+		TestFiles:    []string{"provider/push_certificate_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/push_certificate"},
+	},
+	{
+		TypeName:     "simplemdm_push_certificate_scsr",
+		Factory:      PushCertificateSCSRDataSource,
+		DocsPath:     "docs/data-sources/push_certificate_scsr.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_push_certificate_scsr"},
+		TestFiles:    []string{"provider/push_certificate_scsr_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/push_certificate/scsr"},
+	},
+	{
+		TypeName:     "simplemdm_installed_app",
+		Factory:      InstalledAppDataSource,
+		DocsPath:     "docs/data-sources/installed_app.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_installed_app"},
+		TestFiles:    []string{"provider/installed_app_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/installed_apps/{INSTALLED_APP_ID}"},
+	},
+	{
+		TypeName:     "simplemdm_app",
+		Factory:      AppDataSource,
+		DocsPath:     "docs/data-sources/app.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_app"},
+		TestFiles:    []string{"provider/app_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/apps"},
+	},
+	{
+		TypeName:     "simplemdm_attribute",
+		Factory:      AttributeDataSource,
+		DocsPath:     "docs/data-sources/attribute.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_attribute"},
+		TestFiles:    []string{"provider/attribute_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/custom_attributes"},
+	},
+	{
+		TypeName:     "simplemdm_assignmentgroup",
+		Factory:      AssignmentGroupDataSource,
+		DocsPath:     "docs/data-sources/assignmentgroup.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_assignmentgroup"},
+		TestFiles:    []string{"provider/assignmentGroup_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/assignment_groups"},
+	},
+	{
+		TypeName:     "simplemdm_customprofile",
+		Factory:      CustomProfileDataSource,
+		DocsPath:     "docs/data-sources/customprofile.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_customprofile"},
+		TestFiles:    []string{"provider/customProfile_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/custom_configuration_profiles"},
+	},
+	{
+		TypeName:     "simplemdm_customdeclaration",
+		Factory:      CustomDeclarationDataSource,
+		DocsPath:     "docs/data-sources/customdeclaration.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_customdeclaration"},
+		TestFiles:    []string{"provider/customDeclaration_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/custom_declarations"},
+	},
+	{
+		TypeName:     "simplemdm_device",
+		Factory:      DeviceDataSource,
+		DocsPath:     "docs/data-sources/device.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_device"},
+		TestFiles:    []string{"provider/device_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/devices"},
+	},
+	{
+		TypeName:     "simplemdm_devices",
+		Factory:      DevicesDataSource,
+		DocsPath:     "docs/data-sources/devices.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_devices"},
+		TestFiles:    []string{"provider/devices_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/devices"},
+	},
+	{
+		TypeName:     "simplemdm_device_profiles",
+		Factory:      DeviceProfilesDataSource,
+		DocsPath:     "docs/data-sources/device_profiles.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_device_profiles"},
+		TestFiles:    []string{"provider/device_profiles_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/devices/{DEVICE_ID}/profiles"},
+	},
+	{
+		TypeName:     "simplemdm_device_installed_apps",
+		Factory:      DeviceInstalledAppsDataSource,
+		DocsPath:     "docs/data-sources/device_installed_apps.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_device_installed_apps"},
+		TestFiles:    []string{"provider/device_installed_apps_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/devices/{DEVICE_ID}/installed_apps"},
+	},
+	{
+		TypeName:     "simplemdm_device_users",
+		Factory:      DeviceUsersDataSource,
+		DocsPath:     "docs/data-sources/device_users.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_device_users"},
+		TestFiles:    []string{"provider/device_users_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/devices/{DEVICE_ID}/users"},
+	},
+	{
+		TypeName:     "simplemdm_enrollment",
+		Factory:      EnrollmentDataSource,
+		DocsPath:     "docs/data-sources/enrollment.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_enrollment"},
+		TestFiles:    []string{"provider/enrollment_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/enrollments"},
+	},
+	{
+		TypeName:     "simplemdm_profile",
+		Factory:      ProfileDataSource,
+		DocsPath:     "docs/data-sources/profile.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_profile"},
+		TestFiles:    []string{"provider/profile_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/profiles"},
+	},
+	{
+		TypeName:     "simplemdm_script",
+		Factory:      ScriptDataSource,
+		DocsPath:     "docs/data-sources/script.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_script"},
+		TestFiles:    []string{"provider/script_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/scripts"},
+	},
+	{
+		TypeName:     "simplemdm_scriptjob",
+		Factory:      ScriptJobDataSource,
+		DocsPath:     "docs/data-sources/scriptjob.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_scriptjob"},
+		TestFiles:    []string{"provider/scriptJob_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/script_jobs"},
+	},
+	{
+		TypeName:     "simplemdm_managed_config",
+		Factory:      ManagedConfigDataSource,
+		DocsPath:     "docs/data-sources/managed_config.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_managed_config"},
+		TestFiles:    []string{"provider/managedConfig_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/apps/{APP_ID}/managed_configs"},
+	},
+	{
+		TypeName:     "simplemdm_managed_configs",
+		Factory:      ManagedConfigsDataSource,
+		DocsPath:     "docs/data-sources/managed_configs.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_managed_configs"},
+		TestFiles:    []string{"provider/managedConfigs_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/apps/{APP_ID}/managed_configs"},
+	},
+	{
+		TypeName:     "simplemdm_apps",
+		Factory:      AppsDataSource,
+		DocsPath:     "docs/data-sources/apps.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_apps"},
+		TestFiles:    []string{"provider/apps_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/apps"},
+	},
+	{
+		TypeName:     "simplemdm_app_installs",
+		Factory:      AppInstallsDataSource,
+		DocsPath:     "docs/data-sources/app_installs.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_app_installs"},
+		TestFiles:    []string{"provider/app_installs_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/apps/{APP_ID}/installs"},
+	},
+	{
+		TypeName:     "simplemdm_assignmentgroups",
+		Factory:      AssignmentGroupsDataSource,
+		DocsPath:     "docs/data-sources/assignmentgroups.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_assignmentgroups"},
+		TestFiles:    []string{"provider/assignmentGroups_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/assignment_groups"},
+	},
+	{
+		TypeName:     "simplemdm_attributes",
+		Factory:      AttributesDataSource,
+		DocsPath:     "docs/data-sources/attributes.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_attributes"},
+		TestFiles:    []string{"provider/attributes_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/custom_attributes"},
+	},
+	{
+		TypeName:     "simplemdm_customprofiles",
+		Factory:      CustomProfilesDataSource,
+		DocsPath:     "docs/data-sources/customprofiles.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_customprofiles"},
+		TestFiles:    []string{"provider/customProfiles_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/custom_configuration_profiles"},
+	},
+	{
+		TypeName:     "simplemdm_customdeclarations",
+		Factory:      CustomDeclarationsDataSource,
+		DocsPath:     "docs/data-sources/customdeclarations.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_customdeclarations"},
+		TestFiles:    []string{"provider/customDeclarations_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/custom_declarations"},
+	},
+	{
+		TypeName:     "simplemdm_enrollments",
+		Factory:      EnrollmentsDataSource,
+		DocsPath:     "docs/data-sources/enrollments.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_enrollments"},
+		TestFiles:    []string{"provider/enrollments_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/enrollments"},
+	},
+	{
+		TypeName:     "simplemdm_profiles",
+		Factory:      ProfilesDataSource,
+		DocsPath:     "docs/data-sources/profiles.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_profiles"},
+		TestFiles:    []string{"provider/profiles_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/profiles"},
+	},
+	{
+		TypeName:     "simplemdm_scripts",
+		Factory:      ScriptsDataSource,
+		DocsPath:     "docs/data-sources/scripts.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_scripts"},
+		TestFiles:    []string{"provider/scripts_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/scripts"},
+	},
+	{
+		TypeName:     "simplemdm_scriptjobs",
+		Factory:      ScriptJobsDataSource,
+		DocsPath:     "docs/data-sources/scriptjobs.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_scriptjobs"},
+		TestFiles:    []string{"provider/scriptJobs_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/script_jobs"},
+	},
+	{
+		TypeName:     "simplemdm_device_custom_attribute_values",
+		Factory:      DeviceCustomAttributeValuesDataSource,
+		DocsPath:     "docs/data-sources/device_custom_attribute_values.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_device_custom_attribute_values"},
+		TestFiles:    []string{"provider/device_custom_attribute_values_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/devices/{DEVICE_ID}/custom_attribute_values"},
+	},
+	{
+		TypeName:     "simplemdm_assignmentgroup_custom_attribute_values",
+		Factory:      AssignmentGroupCustomAttributeValuesDataSource,
+		DocsPath:     "docs/data-sources/assignmentgroup_custom_attribute_values.md",
+		ExampleDirs:  []string{"examples/data-sources/simplemdm_assignmentgroup_custom_attribute_values"},
+		TestFiles:    []string{"provider/assignmentgroup_custom_attribute_values_data_source_test.go"},
+		APIEndpoints: []string{"/api/v1/assignment_groups/{ASSIGNMENT_GROUP_ID}/custom_attribute_values"},
+	},
+}
+
+func ResourceFactories() []func() resource.Resource {
+	factories := make([]func() resource.Resource, 0, len(resourceDefinitions))
+	for _, definition := range resourceDefinitions {
+		factories = append(factories, definition.Factory)
+	}
+
+	return factories
+}
+
+func DataSourceFactories() []func() datasource.DataSource {
+	factories := make([]func() datasource.DataSource, 0, len(dataSourceDefinitions))
+	for _, definition := range dataSourceDefinitions {
+		factories = append(factories, definition.Factory)
+	}
+
+	return factories
+}
+
+func ResourceDefinitionMap() map[string]ResourceDefinition {
+	result := make(map[string]ResourceDefinition, len(resourceDefinitions))
+	for _, definition := range resourceDefinitions {
+		result[definition.TypeName] = definition
+	}
+
+	return result
+}
+
+func DataSourceDefinitionMap() map[string]DataSourceDefinition {
+	result := make(map[string]DataSourceDefinition, len(dataSourceDefinitions))
+	for _, definition := range dataSourceDefinitions {
+		result[definition.TypeName] = definition
+	}
+
+	return result
+}
+
+func ResourceDefinitions() []ResourceDefinition {
+	return append([]ResourceDefinition(nil), resourceDefinitions...)
+}
+
+func DataSourceDefinitions() []DataSourceDefinition {
+	return append([]DataSourceDefinition(nil), dataSourceDefinitions...)
+}

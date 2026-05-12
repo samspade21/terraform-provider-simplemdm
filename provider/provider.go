@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -133,7 +133,12 @@ func (p *simplemdmProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	ctx = tflog.SetField(ctx, "simplemdm_host", host)
+	// SECURITY: simplemdm_apikey is set on the context so its value can be
+	// referenced (e.g. in deprecation warnings) without ever being written to
+	// the log stream. MaskFieldValuesWithFieldKeys replaces the value with
+	// "***" in any subsequent tflog.Debug / tflog.Info / tflog.Trace call.
 	ctx = tflog.SetField(ctx, "simplemdm_apikey", apikey)
+	ctx = tflog.MaskFieldValuesWithFieldKeys(ctx, "simplemdm_apikey")
 
 	tflog.Debug(ctx, "Creating SimpleMDM client")
 
@@ -150,14 +155,10 @@ func (p *simplemdmProvider) Configure(ctx context.Context, req provider.Configur
 
 // DataSources defines the data sources implemented in the provider.
 func (p *simplemdmProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{
-		AppDataSource, AttributeDataSource, CustomProfileDataSource, ProfileDataSource, DeviceDataSource, ScriptDataSource, CustomDeclarationDataSource,
-	}
+	return DataSourceFactories()
 }
 
 // Resources defines the resources implemented in the provider.
 func (p *simplemdmProvider) Resources(_ context.Context) []func() resource.Resource {
-	return []func() resource.Resource{
-		CustomProfileResource, AttributeResource, AssignmentGroupResource, DeviceResource, ScriptResource, ScriptJobResource, AppResource, CustomDeclarationResource,
-	}
+	return ResourceFactories()
 }

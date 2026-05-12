@@ -13,16 +13,47 @@ App resource can be used to manage Apps.
 ## Example Usage
 
 ```terraform
-resource "simplemdm_app" "app" {
+resource "simplemdm_app" "marketing" {
   app_store_id = "1090161858"
-  deploy_to    = "outdated" // Default to "none" if not added but possible values are "outdated" and "all"
+  name         = "Marketing App"
+  deploy_to    = "outdated" // Defaults to "none". Valid values: "none", "outdated", "all".
+}
+
+# Computed attributes such as `installation_channels`, `status`, or `version`
+# can be referenced once the app has been created. This output illustrates how
+# to inspect the deployment channels that SimpleMDM reports for the app.
+output "marketing_installation_channels" {
+  description = "Deployment channels supported by the Marketing App."
+  value       = simplemdm_app.marketing.installation_channels
 }
 ```
 
 ```terraform
-resource "simplemdm_app" "app" {
+# Deploy an existing Volume Purchase Program (VPP) app by referencing its
+# bundle identifier. SimpleMDM resolves the bundle ID to the latest catalog
+# metadata and makes it available to devices.
+resource "simplemdm_app" "bundle_id_example" {
   bundle_id = "com.myCompany.MyApp1"
-  deploy_to = "all" // Default to "none" if not added but possible values are "outdated" and "all"
+  deploy_to = "all" // Defaults to "none". Valid values: "none", "outdated", "all".
+}
+
+output "bundle_id_app_status" {
+  description = "Deployment status reported by SimpleMDM for the bundle ID app."
+  value       = simplemdm_app.bundle_id_example.status
+}
+```
+
+```terraform
+# Upload a custom enterprise or macOS package app by providing a binary file.
+# The provider will post the binary to SimpleMDM and keep the metadata in sync.
+resource "simplemdm_app" "enterprise" {
+  name        = "Internal Tools"
+  binary_file = "${path.module}/files/internal-tools.pkg"
+}
+
+output "enterprise_processing_status" {
+  description = "Processing state for the uploaded enterprise app binary."
+  value       = simplemdm_app.enterprise.processing_status
 }
 ```
 
@@ -31,14 +62,24 @@ resource "simplemdm_app" "app" {
 
 ### Optional
 
-- `app_store_id` (String) Required. The Apple App Store ID of the app to be added. Example: 1090161858.
-- `bundle_id` (String) Required. The bundle identifier of the Apple App Store app to be added. Example: com.myCompany.MyApp1
-- `deploy_to` (String) Optional. Deploy the app to associated devices immediately after the app has been uploaded and processed. Possible values are none, outdated or all. Defaults to none.
+- `app_store_id` (String) The Apple App Store ID. Required when adding App Store apps via store ID. Use either this, bundle_id, or binary_file. Example: '1090161858'
+- `binary_file` (String) Path to app binary (ipa, pkg, or dmg) to upload. Required when managing enterprise, custom B2B, or macOS package/disk-image apps. Use either this, app_store_id, or bundle_id. Renames of the binary file with unchanged content do not trigger a re-upload — drift is tracked by sha256, surfaced as binary_file_sha256.
+- `bundle_id` (String) The bundle identifier of the Apple App Store app. Required when adding App Store apps via bundle ID. Use either this, app_store_id, or binary_file. Example: com.myCompany.MyApp1
+- `deploy_to` (String) Deploy the app after upload. Values: 'none' (default), 'outdated' (devices with older version), 'all' (all devices). Note: Only applies during updates; create operations require subsequent update. API does not return this value, so state shows last configured value.
+- `name` (String) The name for this app in SimpleMDM. For App Store apps, this is computed from the store. For binary uploads, you may optionally specify a name, otherwise it's extracted from the binary.
 
 ### Read-Only
 
+- `app_type` (String) The catalog classification of the app, for example app store, enterprise, or custom b2b.
+- `binary_file_sha256` (String) SHA-256 of the most recently uploaded binary. Used to detect content drift independent of the local file path.
+- `created_at` (String) Timestamp when the app was added to SimpleMDM.
 - `id` (String) The ID of this resource.
-- `name` (String) The name that SimpleMDM will use to reference this app. If left blank, SimpleMDM will automatically set this to the app name specified by the binary.
+- `installation_channels` (List of String) The deployment channels supported by the app.
+- `platform_support` (String) The platform supported by the app, such as iOS or macOS.
+- `processing_status` (String) The current processing status of the app binary within SimpleMDM.
+- `status` (String) The current deployment status of the app. Note: This is a write-only parameter; API does not return this value.
+- `updated_at` (String) Timestamp when the app was last updated in SimpleMDM.
+- `version` (String) The latest version reported by SimpleMDM for the app.
 
 ## Import
 

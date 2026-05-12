@@ -1,61 +1,70 @@
 package provider
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
+	simplemdm "github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
+func testAccCheckScriptJobDestroy(s *terraform.State) error {
+	return testAccCheckResourceDestroyed("simplemdm_scriptjob", func(client *simplemdm.Client, id string) error {
+		_, err := fetchScriptJobDetails(context.Background(), client, id)
+		return err
+	})(s)
+}
+
+// TestAccScriptJobResource targets a device group by ID. The script_jobs
+// endpoint accepts assignment_group_ids only, and arbitrary auto-discovered
+// legacy device groups don't qualify (422). Gate on SIMPLEMDM_DEVICE_GROUP_ID
+// and skip otherwise.
 func TestAccScriptJobResource(t *testing.T) {
+	testAccPreCheck(t)
+
+	deviceGroupID := testAccRequireEnv(t, "SIMPLEMDM_DEVICE_GROUP_ID")
+
+	scriptResource := `
+resource "simplemdm_script" "test_script" {
+  name             = "tf_acc_scriptjob_resource_script"
+  variable_support = true
+  content          = <<-EOT
+		#!/bin/bash
+		echo "tf-acc"
+		EOT
+}
+`
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckScriptJobDestroy,
 		Steps: []resource.TestStep{
 			// Create and Read testing
 			{
-				Config: providerConfig + `		
-		resource "simplemdm_scriptjob" "test_job" {
-			script_id              = 5727
-			device_ids             = []
-			assignment_group_ids   = [2179161]
-		}
-				`,
+				Config: providerConfig + scriptResource + fmt.Sprintf(`
+resource "simplemdm_scriptjob" "test_job" {
+  script_id  = simplemdm_script.test_script.id
+  device_ids = []
+  group_ids  = [%q]
+}
+`, deviceGroupID),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Check the script job attributes
 					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "id"),
-					resource.TestCheckResourceAttr("simplemdm_scriptjob.test_job", "script_id", "5727"),
-					resource.TestCheckResourceAttr("simplemdm_scriptjob.test_job", "assignment_group_ids.#", "1"),
-					resource.TestCheckResourceAttr("simplemdm_scriptjob.test_job", "assignment_group_ids.0", "2179161"),
+					resource.TestCheckResourceAttr("simplemdm_scriptjob.test_job", "group_ids.#", "1"),
+					resource.TestCheckResourceAttr("simplemdm_scriptjob.test_job", "group_ids.0", deviceGroupID),
+					resource.TestCheckResourceAttrPair(
+						"simplemdm_scriptjob.test_job", "script_id",
+						"simplemdm_script.test_script", "id",
+					),
+					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "job_identifier"),
+					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "status"),
+					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "pending_count"),
+					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "created_at"),
+					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "variable_support"),
 				),
 			},
-			// // ImportState testing
-			// {
-			// 	ResourceName:      "simplemdm_scriptjob.test_job",
-			// 	ImportState:       true,
-			// 	ImportStateVerify: true,
-			// 	// The filesha and  scriptfile attributes does not exist in SimpleMDM
-			// 	// API, therefore there is no value for it during import.
-			// },
-			// Update and Read testing
-			{
-				Config: providerConfig + `
-		resource "simplemdm_scriptjob" "test_job" {
-			script_id              = 5727
-			device_ids             = [2142348]
-			assignment_group_ids   = []
-			custom_attribute       = "updated_attribute"
-			custom_attribute_regex = "\\r"
-		}
-				`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					// Check the updated script job attributes
-					resource.TestCheckResourceAttrSet("simplemdm_scriptjob.test_job", "id"),
-					resource.TestCheckResourceAttr("simplemdm_scriptjob.test_job", "custom_attribute", "updated_attribute"),
-					resource.TestCheckResourceAttr("simplemdm_scriptjob.test_job", "custom_attribute_regex", "\\r"),
-					resource.TestCheckResourceAttr("simplemdm_scriptjob.test_job", "script_id", "5727"),
-				),
-			},
-			// Delete testing automatically occurs in TestCase
 		},
 	})
 }

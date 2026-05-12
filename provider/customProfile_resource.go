@@ -1,0 +1,342 @@
+package provider
+
+import (
+	"context"
+	"strconv"
+
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+// Ensure the implementation satisfies the expected interfaces.
+var (
+	_ resource.Resource                = &customProfileResource{}
+	_ resource.ResourceWithConfigure   = &customProfileResource{}
+	_ resource.ResourceWithImportState = &customProfileResource{}
+)
+
+// profileResourceModel maps the resource schema data.
+type customProfileResourceModel struct {
+	Name                   types.String `tfsdk:"name"`
+	MobileConfig           types.String `tfsdk:"mobileconfig"`
+	UserScope              types.Bool   `tfsdk:"user_scope"`
+	AttributeSupport       types.Bool   `tfsdk:"attribute_support"`
+	EscapeAttributes       types.Bool   `tfsdk:"escape_attributes"`
+	ReinstallAfterOSUpdate types.Bool   `tfsdk:"reinstall_after_os_update"`
+	Declarative            types.Bool   `tfsdk:"declarative"`
+	ProfileIdentifier      types.String `tfsdk:"profile_identifier"`
+	GroupCount             types.Int64  `tfsdk:"group_count"`
+	DeviceCount            types.Int64  `tfsdk:"device_count"`
+	ProfileSHA             types.String `tfsdk:"profile_sha"`
+	ID                     types.String `tfsdk:"id"`
+}
+
+// ProfileResource is a helper function to simplify the provider implementation.
+func CustomProfileResource() resource.Resource {
+	return &customProfileResource{}
+}
+
+// profileResource is the resource implementation.
+type customProfileResource struct {
+	client *simplemdm.Client
+}
+
+// Configure adds the provider configured client to the resource.
+func (r *customProfileResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+
+	r.client = req.ProviderData.(*simplemdm.Client)
+}
+
+// Metadata returns the resource type name.
+func (r *customProfileResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_customprofile"
+}
+
+// Schema defines the schema for the resource.
+func (r *customProfileResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description: "Custom Profile resource can be used to manage Custom Profile. Can be used together with Device(s), Assignment Group(s) or Device Group(s) and set addition details regarding Custom Profile.",
+		Attributes: map[string]schema.Attribute{
+			"name": schema.StringAttribute{
+				Required:    true,
+				Optional:    false,
+				Description: "Required. A name for the profile. Example: \"My First profile by terraform\"",
+			},
+			"mobileconfig": schema.StringAttribute{
+				Required:    true,
+				Optional:    false,
+				Description: "Required. Can be string or you can use function 'file' or 'templatefile' to load string from file (see examples folder). Example: mobileconfig = file(\"./profiles/profile.mobileconfig\") or mobileconfig = <<-EOT PROFILE STRING EOT",
+			},
+			"id": schema.StringAttribute{
+				Computed: true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Description: "ID of a Custom Configuration Profile in SimpleMDM",
+			},
+			"user_scope": schema.BoolAttribute{
+				Optional:    true,
+				Default:     booldefault.StaticBool(true),
+				Computed:    true,
+				Description: "Optional. A boolean true or false. If false, deploy as a device profile instead of a user profile for macOS devices. Defaults to true.",
+			},
+			"attribute_support": schema.BoolAttribute{
+				Optional:    true,
+				Default:     booldefault.StaticBool(false),
+				Computed:    true,
+				Description: "Optional. A boolean true or false. When enabled, SimpleMDM will process variables in the uploaded profile. Defaults to false",
+			},
+			"escape_attributes": schema.BoolAttribute{
+				Optional:    true,
+				Default:     booldefault.StaticBool(false),
+				Computed:    true,
+				Description: "Optional. A boolean true or false. When enabled, SimpleMDM escape the values of the custom variables in the uploaded profile. Defaults to false",
+			},
+			"reinstall_after_os_update": schema.BoolAttribute{
+				Optional:    true,
+				Default:     booldefault.StaticBool(false),
+				Computed:    true,
+				Description: "Optional. A boolean true or false. When enabled, SimpleMDM will re-install the profile automatically after macOS software updates are detected. Defaults to false",
+			},
+			"declarative": schema.BoolAttribute{
+				Optional:    true,
+				Default:     booldefault.StaticBool(false),
+				Computed:    true,
+				Description: "Optional. A boolean true or false. When enabled, this profile will be installed using Declarative Management on any device that has Declarative Management enabled. Defaults to false.",
+			},
+			"profile_identifier": schema.StringAttribute{
+				Computed:    true,
+				Description: "Read-only profile identifier assigned by SimpleMDM.",
+			},
+			"group_count": schema.Int64Attribute{
+				Computed:    true,
+				Description: "Number of device groups assigned to this custom configuration profile.",
+			},
+			"device_count": schema.Int64Attribute{
+				Computed:    true,
+				Description: "Number of devices assigned to this custom configuration profile.",
+			},
+			"profile_sha": schema.StringAttribute{
+				Computed:    true,
+				Description: "SHA-256 checksum reported by SimpleMDM for the current mobileconfig payload.",
+			},
+		},
+	}
+}
+
+func (r *customProfileResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// Retrieve import ID and save to id attribute
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+// Create a new resource
+func (r *customProfileResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	//Retrieve values from plan
+	var plan customProfileResourceModel
+	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Generate API request body from plan
+	Profile, err := simplemdmext.CreateCustomProfile(ctx, r.client, simplemdmext.CustomProfileCreatePayload{
+		Name:                   plan.Name.ValueString(),
+		MobileConfig:           plan.MobileConfig.ValueString(),
+		UserScope:              plan.UserScope.ValueBool(),
+		AttributeSupport:       plan.AttributeSupport.ValueBool(),
+		EscapeAttributes:       plan.EscapeAttributes.ValueBool(),
+		ReinstallAfterOsUpdate: plan.ReinstallAfterOSUpdate.ValueBool(),
+		Declarative:            plan.Declarative.ValueBool(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error creating SimpleMDM custom profile",
+			"Could not create custom profile: "+err.Error(),
+		)
+		return
+	}
+
+	// Map response body to schema and populate Computed attribute values.
+	// We keep plan.MobileConfig as the content we uploaded — no need to
+	// download it back.
+	plan.ID = types.StringValue(strconv.Itoa(Profile.Data.ID))
+	assignCustomProfileExtendedAttributes(&plan, Profile.Data.Attributes)
+
+	// SimpleMDM omits profile_sha from the Create response, so compute it
+	// once via the dedicated download-and-hash endpoint. Read skips this
+	// (it uses the LIST endpoint's profile_sha field), so we only pay the
+	// cost on Create / Update.
+	sha, _, err := r.client.CustomProfileSHA(plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading SimpleMDM custom profile SHA",
+			"Could not download custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
+		)
+		return
+	}
+	plan.ProfileSHA = stringValueOrNull(sha)
+
+	// Set state to fully populated data
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}
+
+func (r *customProfileResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	// Get current state
+	var state customProfileResourceModel
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Capture stored values before overwriting with API metadata.
+	oldSHA := state.ProfileSHA.ValueString()
+	oldMobileConfig := state.MobileConfig.ValueString()
+
+	profile, err := simplemdmext.GetCustomProfile(ctx, r.client, state.ID.ValueString())
+	if err != nil {
+		if isNotFoundError(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+
+		resp.Diagnostics.AddError(
+			"Error reading SimpleMDM custom profile",
+			"Could not read custom profile ID "+state.ID.ValueString()+": "+err.Error(),
+		)
+		return
+	}
+
+	assignCustomProfileExtendedAttributes(&state, profile.Data.Attributes)
+	state.ID = types.StringValue(strconv.Itoa(profile.Data.ID))
+
+	// Detect drift using profile_sha from the API (no download needed).
+	// If the SHA changed, clear mobileconfig so TF sees a diff and re-uploads.
+	// If SHA is unchanged (or not returned), keep the stored mobileconfig content.
+	apiSHA := profile.Data.Attributes.ProfileSHA
+	if apiSHA != "" && oldSHA != "" && apiSHA != oldSHA {
+		state.MobileConfig = types.StringValue("")
+	} else {
+		state.MobileConfig = types.StringValue(oldMobileConfig)
+	}
+
+	// Set refreshed state
+	diags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}
+
+func (r *customProfileResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	//Retrieve values from plan
+	var plan customProfileResourceModel
+	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	profile, err := simplemdmext.UpdateCustomProfile(ctx, r.client, plan.ID.ValueString(), simplemdmext.CustomProfileCreatePayload{
+		Name:                   plan.Name.ValueString(),
+		MobileConfig:           plan.MobileConfig.ValueString(),
+		UserScope:              plan.UserScope.ValueBool(),
+		AttributeSupport:       plan.AttributeSupport.ValueBool(),
+		EscapeAttributes:       plan.EscapeAttributes.ValueBool(),
+		ReinstallAfterOsUpdate: plan.ReinstallAfterOSUpdate.ValueBool(),
+		Declarative:            plan.Declarative.ValueBool(),
+	})
+	if err != nil {
+		if isNotFoundError(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+
+		resp.Diagnostics.AddError(
+			"Error updating SimpleMDM custom profile",
+			"Could not update custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
+		)
+		return
+	}
+
+	// Keep plan.MobileConfig as the content we uploaded — no download needed.
+	assignCustomProfileExtendedAttributes(&plan, profile.Data.Attributes)
+
+	// Refresh profile_sha: SimpleMDM omits it from the Update response.
+	sha, _, err := r.client.CustomProfileSHA(plan.ID.ValueString())
+	if err != nil {
+		if isNotFoundError(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"Error reading SimpleMDM custom profile SHA",
+			"Could not download custom profile ID "+plan.ID.ValueString()+": "+err.Error(),
+		)
+		return
+	}
+	plan.ProfileSHA = stringValueOrNull(sha)
+
+	diags = resp.State.Set(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+}
+
+func (r *customProfileResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state customProfileResourceModel
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Delete existing custom profile
+	err := r.client.CustomProfileDelete(state.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error deleting SimpleMDM custom profile",
+			"Could not delete custom profile ID "+state.ID.ValueString()+": "+err.Error(),
+		)
+		return
+	}
+}
+
+// assignCustomProfileExtendedAttributes copies the API attributes (including the
+// declarative flag) into the resource model.
+func assignCustomProfileExtendedAttributes(model *customProfileResourceModel, attributes simplemdmext.CustomProfileExtendedAttributes) {
+	model.Name = types.StringValue(attributes.Name)
+	model.UserScope = types.BoolValue(attributes.UserScope)
+	model.AttributeSupport = types.BoolValue(attributes.AttributeSupport)
+	model.EscapeAttributes = types.BoolValue(attributes.EscapeAttributes)
+	model.ReinstallAfterOSUpdate = types.BoolValue(attributes.ReinstallAfterOsUpdate)
+	model.Declarative = types.BoolValue(attributes.Declarative)
+	model.ProfileIdentifier = stringValueOrNull(attributes.ProfileIdentifier)
+	model.GroupCount = types.Int64Value(int64(attributes.GroupCount))
+	model.DeviceCount = types.Int64Value(int64(attributes.DeviceCount))
+	model.ProfileSHA = stringValueOrNull(attributes.ProfileSHA)
+}
+
+func stringValueOrNull(value string) types.String {
+	if value == "" {
+		return types.StringNull()
+	}
+
+	return types.StringValue(value)
+}

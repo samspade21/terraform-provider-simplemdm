@@ -1,8 +1,7 @@
 # Terraform Provider testing workflow.
 name: Tests
 
-# This GitHub action runs your tests for each pull request and push.
-# Optionally, you can turn it on using a schedule for regular testing.
+# This GitHub action runs tests for each pull request and push.
 on:
   pull_request:
     paths-ignore:
@@ -11,9 +10,17 @@ on:
     paths-ignore:
       - 'README.md'
 
-# Testing only needs permissions to read the repository contents.
 permissions:
   contents: read
+
+# Acceptance tests hit a single shared SimpleMDM tenant. Two workflow runs
+# in parallel (e.g. main + pr-into-upstream pushed back-to-back) race on
+# the same fixture apps and fail with "itunes_store_id is not unique."
+# Force one workflow run at a time across the whole repo. Pending runs
+# queue; we never want to cancel a partially-applied test mid-flight.
+concurrency:
+  group: simplemdm-tenant-tests
+  cancel-in-progress: false
 
 jobs:
   # Ensure project builds before running testing matrix
@@ -22,60 +29,106 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
           cache: true
       - run: go mod download
-      - run: go build -v .
+      - run: go build -v ./...
       - name: Run linters
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
 
   generate:
+    name: Generate Docs
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
       - run: go generate ./...
-      - name: git diff
+      - name: Check for changes
+        id: git-check
         run: |
-          git diff --compact-summary --exit-code || \
-            (echo; echo "Unexpected difference in directories after code generation. Run 'go generate ./...' command and commit."; exit 1)
+          git diff --compact-summary --exit-code || echo "has_changes=true" >> $GITHUB_OUTPUT
+      - name: Commit and push changes (push events)
+        if: steps.git-check.outputs.has_changes == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m "docs: Auto-generate documentation from schema changes"
+          # Race-tolerant push: if main moved underneath this job (e.g. we
+          # pushed a follow-up commit), rebase on top and retry once. A
+          # second collision (rare) shouldn't fail the whole job — the
+          # docs will regenerate on the next push.
+          git push || (git fetch origin main && git rebase origin/main && git push) || echo "Doc auto-push skipped — will regenerate on next push"
+      - name: Fail on uncommitted changes (pull requests)
+        if: steps.git-check.outputs.has_changes == 'true' && github.event_name == 'pull_request'
+        run: |
+          echo "Unexpected difference in directories after code generation."
+          echo "Run 'go generate ./...' command and commit the changes."
+          git diff --compact-summary
+          exit 1
 
-  # Run acceptance tests in a matrix with Terraform CLI versions
+  # Run acceptance tests in a matrix with Terraform CLI versions.
+  # Tests require TF_ACC=1 and SIMPLEMDM_APIKEY to run; without them,
+  # acceptance tests are automatically skipped while unit/coverage tests run.
   test:
-    name: Terraform Provider Acceptance Tests
+    name: Terraform Provider Tests (${{ matrix.terraform }})
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
+      # Acceptance tests share a single SimpleMDM tenant; running the matrix
+      # in parallel causes fixture collisions (e.g. "itunes_store_id is not
+      # unique. This app already exists"). Serialize the matrix.
+      max-parallel: 1
       matrix:
-        # list whatever Terraform versions here you would like to support
         terraform:
           - '1.8.*'
+          - '1.9.*'
+          - '1.10.*'
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-      - uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
           cache: true
-      - uses: hashicorp/setup-terraform@a1502cd9e758c50496cc9ac5308c4843bcd56d36 # v3.0.0
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
-      - env:
+      - name: Run tests
+        env:
           TF_ACC: "1"
+          # Required: API key for the test tenant. All other fixtures are
+          # auto-discovered or self-provisioned by the tests.
           SIMPLEMDM_APIKEY: ${{ secrets.SIMPLEMDM_APIKEY }}
-        run: go test -v -cover ./provider/
-        timeout-minutes: 10
+          # Optional: gates the simplemdm_enrollment + simplemdm_scriptjob
+          # resource tests. The /enrollments and /script_jobs endpoints reject
+          # both freshly-created assignment groups and arbitrary auto-discovered
+          # legacy device groups, so a known-eligible group must be pinned.
+          SIMPLEMDM_DEVICE_GROUP_ID: ${{ secrets.SIMPLEMDM_DEVICE_GROUP_ID }}
+          # Optional: gates simplemdm_push_certificate. Real APNs cert from
+          # Apple; impossible to discover or fabricate.
+          SIMPLEMDM_PUSH_CERT_PEM: ${{ secrets.SIMPLEMDM_PUSH_CERT_PEM }}
+          SIMPLEMDM_PUSH_CERT_APPLE_ID: ${{ secrets.SIMPLEMDM_PUSH_CERT_APPLE_ID }}
+        # -timeout 30m is required: the full acceptance suite hits a single
+        # SimpleMDM tenant sequentially and routinely runs 12–18 min once
+        # rate limits kick in. Go's default is 10 min and panics mid-run.
+        run: go test -v -cover -timeout 30m ./provider/... ./internal/...
+        timeout-minutes: 35

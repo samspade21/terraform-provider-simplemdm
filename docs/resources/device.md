@@ -14,14 +14,81 @@ Device resource can be used to manage Device. Can be used together with Custom P
 
 ```terraform
 resource "simplemdm_device" "firstdevice" {
-  // Attribute name (required)
-  name           = "mydevice"
-  devicename     = "OSmydevice"
-  devicegroup    = 123456
+  // Device name (required)
+  name = "mydevice"
+
+  // Optional: Set the device hostname (requires supervision, async operation)
+  devicename = "OSmydevice"
+
+  // Optional: Assign to device group (deprecated - use static_group_ids instead)
+  devicegroup = 123456
+
+  // Optional: Apply profiles
   profiles       = [456123]
   customprofiles = [456123]
+
+  // Optional: Set custom attributes
   attributes = {
     "myattribute" = "testvalue"
+  }
+}
+
+# Example using static_group_ids (recommended)
+resource "simplemdm_device" "modern_device" {
+  name = "modern-device"
+
+  # Assign to multiple static groups
+  static_group_ids = ["123", "456"]
+
+  attributes = {
+    "location" = "office"
+  }
+}
+```
+
+```terraform
+# Advanced Example - Device with multiple profiles and attributes
+resource "simplemdm_attribute" "location" {
+  name          = "office_location"
+  default_value = "headquarters"
+}
+
+resource "simplemdm_devicegroup" "corporate_devices" {
+  name = "Corporate Devices"
+}
+
+resource "simplemdm_customprofile" "vpn_profile" {
+  name         = "Corporate VPN"
+  mobileconfig = file("${path.module}/profiles/vpn.mobileconfig")
+}
+
+resource "simplemdm_device" "executive_laptop" {
+  name       = "CEO MacBook Pro"
+  devicename = "ceo-mbp-2024"
+
+  # Assign to device group
+  devicegroup = simplemdm_devicegroup.corporate_devices.id
+
+  # Apply custom profiles
+  customprofiles = [
+    simplemdm_customprofile.vpn_profile.id,
+  ]
+
+  # Set custom attributes
+  attributes = {
+    (simplemdm_attribute.location.name) = "executive_floor"
+    "asset_tag"                         = "EXEC-001"
+    "owner"                             = "executive_team"
+  }
+}
+
+output "device_details" {
+  description = "Details of the configured device"
+  value = {
+    id          = simplemdm_device.executive_laptop.id
+    name        = simplemdm_device.executive_laptop.name
+    devicename  = simplemdm_device.executive_laptop.devicename
+    devicegroup = simplemdm_device.executive_laptop.devicegroup
   }
 }
 ```
@@ -35,13 +102,16 @@ resource "simplemdm_device" "firstdevice" {
 
 ### Optional
 
-- `attributes` (Map of String) Optional. Map of Attributes and values set for this Group
-- `devicegroups` (Set of String) The ID of static Group(s) where device will be assigned.
-- `devicename` (String) The Device name (localhost name) of the device.
-- `profiles` (Set of String) Optional. List of Configuration Profiles (Custom or predefined Profiles and Custom Declarations) assigned to this device.
+- `attributes` (Map of String) Map of custom attribute names to values for this device.
+- `customprofiles` (Set of String) Optional. List of Custom Configuration Profiles assigned to this Device
+- `devicegroup` (String) The ID of Device Group where device will be assigned. This uses the deprecated device_group parameter.
+- `devicename` (String) The hostname that appears on the device itself. Requires supervision. This operation is asynchronous and occurs when the device is online.
+- `profiles` (Set of String) Optional. List of Configuration Profiles assigned to this Device
+- `static_group_ids` (Set of String) Set of static group IDs to assign the device to. This is the recommended way to assign devices to groups.
 
 ### Read-Only
 
+- `details` (Map of String) Full set of attributes returned by the SimpleMDM device record.
 - `enrollmenturl` (String) SimpleMDM enrollment URL is generated when new device is created via API.
 - `id` (String) The ID of the Device in SimpleMDM
 

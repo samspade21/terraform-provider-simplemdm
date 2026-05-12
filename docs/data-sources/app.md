@@ -13,8 +13,25 @@ App data source can be used together with Assignment Group(s) to assign App(s) t
 ## Example Usage
 
 ```terraform
+# Query account-specific app only (default behavior)
 data "simplemdm_app" "myapp" {
   id = "123456"
+}
+
+# Query including shared catalog apps
+data "simplemdm_app" "shared_app" {
+  id             = "789012"
+  include_shared = true
+}
+
+output "app_store_identifier" {
+  description = "Apple App Store ID associated with the app."
+  value       = data.simplemdm_app.myapp.app_store_id
+}
+
+output "app_installation_channels" {
+  description = "Deployment channels supported by the app."
+  value       = data.simplemdm_app.myapp.installation_channels
 }
 ```
 
@@ -25,6 +42,21 @@ data "simplemdm_app" "myapp" {
 
 - `id` (String) The ID of the attribute.
 
+### Optional
+
+- `include_shared` (Boolean) Include apps from the SimpleMDM shared catalog. When set to true, the data source will query apps available in the shared catalog in addition to account-specific apps. Defaults to false.
+
 ### Read-Only
 
+- `app_store_id` (String) The Apple App Store ID associated with the app.
+- `app_type` (String) The catalog classification of the app, for example app store, enterprise, or custom b2b.
+- `bundle_id` (String) The bundle identifier of the app.
+- `created_at` (String) Timestamp when the app was added to SimpleMDM.
+- `deploy_to` (String) Where the app is deployed (none, outdated, or all).
+- `installation_channels` (List of String) The deployment channels supported by the app.
 - `name` (String) The name of the attribute.
+- `platform_support` (String) The platform supported by the app, such as iOS or macOS.
+- `processing_status` (String) The current processing status of the app binary within SimpleMDM.
+- `status` (String) The current deployment status of the app.
+- `updated_at` (String) Timestamp when the app was last updated in SimpleMDM.
+- `version` (String) The latest version reported by SimpleMDM for the app.

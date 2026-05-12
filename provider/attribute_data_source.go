@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -18,6 +18,7 @@ var (
 
 // attributeDataSourceModel maps the data source schema data.
 type attributeDataSourceModel struct {
+	ID           types.String `tfsdk:"id"`
 	DefaultValue types.String `tfsdk:"default_value"`
 	Name         types.String `tfsdk:"name"`
 }
@@ -42,6 +43,10 @@ func (d *attributeDataSource) Schema(_ context.Context, _ datasource.SchemaReque
 	resp.Schema = schema.Schema{
 		Description: "Attribute data source can be used together with Device(s) or Device Group(s) to set values or in lifecycle management.",
 		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed:    true,
+				Description: "The unique identifier for the custom attribute (same as name).",
+			},
 			"name": schema.StringAttribute{
 				Required:    true,
 				Description: "The name (and ID) of the Attribute.",
@@ -62,19 +67,26 @@ func (d *attributeDataSource) Read(ctx context.Context, req datasource.ReadReque
 
 	attribute, err := d.client.AttributeGet(state.Name.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to Read SimpleMDM attribute",
-			err.Error(),
-		)
+		if isNotFoundError(err) {
+			resp.Diagnostics.AddError(
+				"SimpleMDM attribute not found",
+				fmt.Sprintf("The attribute with name %s was not found. It may have been deleted.", state.Name.ValueString()),
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				"Unable to Read SimpleMDM attribute",
+				err.Error(),
+			)
+		}
 		return
 	}
 
 	// Map response body to model
+	state.ID = types.StringValue(attribute.Data.Attributes.Name)
 	state.Name = types.StringValue(attribute.Data.Attributes.Name)
-	state.DefaultValue = types.StringValue(attribute.Data.Attributes.DefaultValue)
+	state.DefaultValue = stringValueOrNull(attribute.Data.Attributes.DefaultValue)
 
 	// Set state
-
 	diags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {

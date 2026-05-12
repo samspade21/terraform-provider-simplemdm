@@ -16,9 +16,46 @@ Script resource can be used to manage Scripts Jobs.
 resource "simplemdm_scriptjob" "test" {
   script_id              = "35"
   device_ids             = ["1", "2", "3"]
+  group_ids              = ["4", "5"]
   assignment_group_ids   = ["6", "7"]
   custom_attribute       = "greeting_attribute"
   custom_attribute_regex = "\\n"
+}
+```
+
+```terraform
+# Advanced Example - Script job targeting specific devices with custom attribute filtering
+resource "simplemdm_script" "update_software" {
+  name            = "Software Update Script"
+  scriptfile      = file("${path.module}/scripts/update.sh")
+  variablesupport = true
+}
+
+resource "simplemdm_assignmentgroup" "production_servers" {
+  name = "Production Servers"
+}
+
+resource "simplemdm_scriptjob" "scheduled_update" {
+  script_id = simplemdm_script.update_software.id
+
+  # Target specific assignment groups
+  assignment_group_ids = [
+    simplemdm_assignmentgroup.production_servers.id,
+  ]
+
+  # Use custom attribute to pass data to the script
+  custom_attribute = "update_window"
+
+  # Filter devices based on attribute value using regex
+  custom_attribute_regex = "^(night|weekend)$"
+}
+
+output "job_status" {
+  description = "Script job execution details"
+  value = {
+    id        = simplemdm_scriptjob.scheduled_update.id
+    script_id = simplemdm_scriptjob.scheduled_update.script_id
+  }
 }
 ```
 
@@ -27,19 +64,42 @@ resource "simplemdm_scriptjob" "test" {
 
 ### Required
 
-- `assignment_group_ids` (Set of String) A comma separated list of assignment group IDs to run the script on. All macOS devices from these assignment groups will be included At least one of `device_ids`, `group_ids`, or `assignment_group_ids` must be provided.
-- `device_ids` (Set of String) A comma separated list of device IDs to run the script on. At least one of `device_ids`, `group_ids`, or `assignment_group_ids` must be provided.
 - `script_id` (String) Required. The ID of the script to be run on the devices
 
 ### Optional
 
+- `assignment_group_ids` (Set of String) A comma separated list of assignment group IDs to run the script on. All macOS devices from these assignment groups will be included At least one of `device_ids`, `group_ids`, or `assignment_group_ids` must be provided.
 - `custom_attribute` (String) Optional. If provided the output from the script will be stored in this custom attribute on each device.
-- `custom_attribute_regex` (String) Optional. Used to sanitize the output from the script before storing it in the custom attribute. Can be left empty but 
- is recommended.
+- `custom_attribute_regex` (String) Optional. Used to sanitize the output from the script before storing it in the custom attribute. Can be left empty but \n is recommended.
+- `device_ids` (Set of String) A comma separated list of device IDs to run the script on. At least one of `device_ids`, `group_ids`, or `assignment_group_ids` must be provided.
+- `group_ids` (Set of String) A comma separated list of group IDs to run the script on. All macOS devices from these groups will be included. At least one of `device_ids`, `group_ids`, or `assignment_group_ids` must be provided.
 
 ### Read-Only
 
+- `content` (String) Script contents that were executed by the job.
+- `created_at` (String) Creation timestamp returned by the API.
+- `created_by` (String) User or API key that created the job.
+- `devices` (Attributes List) Execution results for each targeted device. (see [below for nested schema](#nestedatt--devices))
+- `errored_count` (Number) Number of devices that failed to execute the script.
 - `id` (String) ID of a Script Job in SimpleMDM
+- `job_identifier` (String) Short identifier string for the job (maps to API's 'job_id' field, different from the numeric ID).
+- `job_name` (String) Human friendly name of the job.
+- `pending_count` (Number) Number of devices that have not yet reported a result.
+- `script_name` (String) Name of the script that was executed.
+- `status` (String) Current execution status of the job.
+- `success_count` (Number) Number of devices that completed successfully.
+- `updated_at` (String) Last update timestamp returned by the API.
+- `variable_support` (Boolean) Indicates whether the script supports variables.
+
+<a id="nestedatt--devices"></a>
+### Nested Schema for `devices`
+
+Read-Only:
+
+- `id` (String) Device identifier.
+- `response` (String) Output returned by the device, when available.
+- `status` (String) Execution status reported for the device.
+- `status_code` (String) Optional status code returned by the device.
 
 ## Import
 

@@ -14,9 +14,29 @@ Script resource can be used to manage Scripts.
 
 ```terraform
 resource "simplemdm_script" "test" {
-  name            = "This is test script"
-  scriptfile      = file("./testfiles/testscript.sh")
-  variablesupport = true
+  name             = "This is test script"
+  content          = file("./testfiles/testscript.sh")
+  variable_support = true
+}
+```
+
+```terraform
+# Advanced Example - Script with variable support for templating
+resource "simplemdm_script" "device_setup" {
+  name             = "Initial Device Setup"
+  content          = file("${path.module}/scripts/setup.sh")
+  variable_support = true
+}
+
+# Example script that uses variables:
+# #!/bin/bash
+# echo "Setting up device for: $DEVICE_NAME"
+# echo "Location: $OFFICE_LOCATION"
+# # Script continues with device-specific setup...
+
+output "script_id" {
+  description = "ID of the setup script for use in script jobs"
+  value       = simplemdm_script.device_setup.id
 }
 ```
 
@@ -25,15 +45,12 @@ resource "simplemdm_script" "test" {
 
 ### Required
 
+- `content` (String) Required. The script content. Must begin with a valid shebang (e.g., #!/bin/sh). Can be loaded from a file using the file() or templatefile() functions. Example: content = file("./scripts/script.sh")
 - `name` (String) Required. A name for the Script. Example: "My First Script managed by terraform"
-- `scriptfile` (String) Required. Can be directly string or you can use function 'file' or 'templatefile' to load string from file. Emaple: scriptfile = file("./scripts/script.sh") or scriptfile = <<-EOT
- #!/bin/bash
- echo "Hello!!"
- EOT
 
 ### Optional
 
-- `variablesupport` (Boolean) Optional. A boolean true or false. Whether or not to enable variable support in this script. Defaults to false
+- `variable_support` (Boolean) Optional. Whether to enable variable support in this script. The provider converts boolean values to the API's expected format. Defaults to false.
 
 ### Read-Only
 

@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -19,8 +20,14 @@ var (
 
 // deviceDataSourceModel maps the data source schema data.
 type deviceDataSourceModel struct {
-	ID   types.String `tfsdk:"id"`
-	Name types.String `tfsdk:"name"`
+	ID            types.String `tfsdk:"id"`
+	Name          types.String `tfsdk:"name"`
+	DeviceName    types.String `tfsdk:"devicename"`
+	Status        types.String `tfsdk:"status"`
+	DeviceGroup   types.String `tfsdk:"devicegroup"`
+	EnrollmentURL types.String `tfsdk:"enrollmenturl"`
+	EnrolledAt    types.String `tfsdk:"enrolled_at"`
+	Details       types.Map    `tfsdk:"details"`
 }
 
 // deviceDataSource is a helper function to simplify the provider implementation.
@@ -51,6 +58,31 @@ func (d *deviceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 				Required:    true,
 				Description: "The ID of the device.",
 			},
+			"devicename": schema.StringAttribute{
+				Computed:    true,
+				Description: "The hostname reported by the device.",
+			},
+			"status": schema.StringAttribute{
+				Computed:    true,
+				Description: "Current enrollment status of the device (e.g., enrolled, awaiting_enrollment).",
+			},
+			"devicegroup": schema.StringAttribute{
+				Computed:    true,
+				Description: "Device group identifier for the device.",
+			},
+			"enrollmenturl": schema.StringAttribute{
+				Computed:    true,
+				Description: "Enrollment URL generated for the device, when available.",
+			},
+			"enrolled_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the device was enrolled.",
+			},
+			"details": schema.MapAttribute{
+				Computed:    true,
+				ElementType: types.StringType,
+				Description: "Full set of attributes returned by the SimpleMDM API for the device.",
+			},
 		},
 	}
 }
@@ -61,18 +93,60 @@ func (d *deviceDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	diags := req.Config.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 
-	device, err := d.client.DeviceGet(state.ID.ValueString())
+	device, err := simplemdmext.GetDevice(ctx, d.client, state.ID.ValueString(), true)
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to Read SimpleMDM device",
-			err.Error(),
-		)
+		if isNotFoundError(err) {
+			resp.Diagnostics.AddError(
+				"SimpleMDM device not found",
+				fmt.Sprintf("The device with ID %s was not found. It may have been deleted.", state.ID.ValueString()),
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				"Unable to Read SimpleMDM device",
+				err.Error(),
+			)
+		}
 		return
 	}
 
 	// Map response body to model
-	state.Name = types.StringValue(device.Data.Attributes.Name)
 	state.ID = types.StringValue(strconv.Itoa(device.Data.ID))
+	flatAttributes := simplemdmext.FlattenAttributes(device.Data.Attributes)
+	if name, ok := flatAttributes["name"]; ok && name != "" {
+		state.Name = types.StringValue(name)
+	}
+	if deviceName, ok := flatAttributes["device_name"]; ok && deviceName != "" {
+		state.DeviceName = types.StringValue(deviceName)
+	} else {
+		state.DeviceName = types.StringNull()
+	}
+	if status, ok := flatAttributes["status"]; ok && status != "" {
+		state.Status = types.StringValue(status)
+	} else {
+		state.Status = types.StringNull()
+	}
+	if enrollmentURL, ok := flatAttributes["enrollment_url"]; ok && enrollmentURL != "" {
+		state.EnrollmentURL = types.StringValue(enrollmentURL)
+	} else {
+		state.EnrollmentURL = types.StringNull()
+	}
+	if enrolledAt, ok := flatAttributes["enrolled_at"]; ok && enrolledAt != "" {
+		state.EnrolledAt = types.StringValue(enrolledAt)
+	} else {
+		state.EnrolledAt = types.StringNull()
+	}
+	if groupID := device.Data.Relationships.DeviceGroup.Data.ID; groupID != 0 {
+		state.DeviceGroup = types.StringValue(strconv.Itoa(groupID))
+	} else {
+		state.DeviceGroup = types.StringNull()
+	}
+
+	detailsValue, detailsDiags := types.MapValueFrom(ctx, types.StringType, flatAttributes)
+	resp.Diagnostics.Append(detailsDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	state.Details = detailsValue
 
 	// Set state
 

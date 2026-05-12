@@ -3,12 +3,12 @@
 page_title: "simplemdm_attribute Resource - simplemdm"
 subcategory: ""
 description: |-
-  Attribute resourse can be used to manage SimpleMDM Attribute. Can be used together with Device(s) or Device Group(s) to set values or in lifecycle management.
+  Attribute resource can be used to manage SimpleMDM Attribute. Can be used together with Device(s) or Device Group(s) to set values or in lifecycle management.
 ---
 
 # simplemdm_attribute (Resource)
 
-Attribute resourse can be used to manage SimpleMDM Attribute. Can be used together with Device(s) or Device Group(s) to set values or in lifecycle management.
+Attribute resource can be used to manage SimpleMDM Attribute. Can be used together with Device(s) or Device Group(s) to set values or in lifecycle management.
 
 ## Example Usage
 
@@ -16,6 +16,30 @@ Attribute resourse can be used to manage SimpleMDM Attribute. Can be used togeth
 resource "simplemdm_attribute" "myattribute" {
   name          = "Myfirstattribute"
   default_value = "value of the attribute"
+}
+```
+
+```terraform
+# Advanced Example - Attribute with device assignment
+resource "simplemdm_attribute" "department" {
+  name          = "department"
+  default_value = "general"
+}
+
+resource "simplemdm_device" "sales_laptop" {
+  name = "Sales Team Laptop"
+  attributes = {
+    (simplemdm_attribute.department.name) = "sales"
+  }
+}
+
+output "attribute_info" {
+  description = "Details about the department attribute"
+  value = {
+    id            = simplemdm_attribute.department.id
+    name          = simplemdm_attribute.department.name
+    default_value = simplemdm_attribute.department.default_value
+  }
 }
 ```
 

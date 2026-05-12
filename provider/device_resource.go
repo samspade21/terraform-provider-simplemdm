@@ -3,10 +3,11 @@ package provider
 import (
 	"context"
 	"strconv"
-	"strings"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdmext"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -24,13 +25,16 @@ var (
 
 // deviceGroupResourceModel maps the resource schema data.
 type deviceResourceModel struct {
-	Name          types.String `tfsdk:"name"`
-	ID            types.String `tfsdk:"id"`
-	Attributes    types.Map    `tfsdk:"attributes"`
-	Profiles      types.Set    `tfsdk:"profiles"`
-	DeviceGroups  types.Set    `tfsdk:"devicegroups"`
-	DeviceName    types.String `tfsdk:"devicename"`
-	EnrollmentURL types.String `tfsdk:"enrollmenturl"`
+	Name           types.String `tfsdk:"name"`
+	ID             types.String `tfsdk:"id"`
+	Attributes     types.Map    `tfsdk:"attributes"`
+	CustomProfiles types.Set    `tfsdk:"customprofiles"`
+	Profiles       types.Set    `tfsdk:"profiles"`
+	DeviceGroup    types.String `tfsdk:"devicegroup"`
+	StaticGroupIDs types.Set    `tfsdk:"static_group_ids"`
+	DeviceName     types.String `tfsdk:"devicename"`
+	EnrollmentURL  types.String `tfsdk:"enrollmenturl"`
+	Details        types.Map    `tfsdk:"details"`
 }
 
 // deviceGroupResource is a helper function to simplify the provider implementation.
@@ -77,22 +81,30 @@ func (r *deviceResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			"profiles": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Optional. List of Configuration Profiles (Custom or predefined Profiles and Custom Declarations) assigned to this device.",
+				Description: "Optional. List of Configuration Profiles assigned to this Device",
+			},
+			"customprofiles": schema.SetAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "Optional. List of Custom Configuration Profiles assigned to this Device",
 			},
 			"attributes": schema.MapAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Optional. Map of Attributes and values set for this Group",
+				Description: "Map of custom attribute names to values for this device.",
 			},
-			"devicegroups": schema.SetAttribute{
+			"devicegroup": schema.StringAttribute{
+				Optional:    true,
+				Description: "The ID of Device Group where device will be assigned. This uses the deprecated device_group parameter.",
+			},
+			"static_group_ids": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "The ID of static Group(s) where device will be assigned.",
+				Description: "Set of static group IDs to assign the device to. This is the recommended way to assign devices to groups.",
 			},
 			"devicename": schema.StringAttribute{
-				Required:    false,
 				Optional:    true,
-				Description: "The Device name (localhost name) of the device.",
+				Description: "The hostname that appears on the device itself. Requires supervision. This operation is asynchronous and occurs when the device is online.",
 			},
 			"enrollmenturl": schema.StringAttribute{
 				Computed: true,
@@ -100,6 +112,11 @@ func (r *deviceResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 					stringplanmodifier.UseStateForUnknown(),
 				},
 				Description: "SimpleMDM enrollment URL is generated when new device is created via API.",
+			},
+			"details": schema.MapAttribute{
+				ElementType: types.StringType,
+				Computed:    true,
+				Description: "Full set of attributes returned by the SimpleMDM device record.",
 			},
 		},
 	}
@@ -120,12 +137,18 @@ func (r *deviceResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	groups := []string{}
-	for _, groupId := range plan.DeviceGroups.Elements() {
-		groups = append(groups, strings.Replace(groupId.String(), "\"", "", 2))
+	// Generate API request body from plan - collect all group IDs as a slice
+	var groupIDs []string
+	if !plan.DeviceGroup.IsNull() && plan.DeviceGroup.ValueString() != "" {
+		groupIDs = append(groupIDs, plan.DeviceGroup.ValueString())
 	}
-	// Generate API request body from plan
-	device, err := r.client.DeviceCreate(plan.Name.ValueString(), groups)
+	if !plan.StaticGroupIDs.IsNull() {
+		for _, id := range plan.StaticGroupIDs.Elements() {
+			groupIDs = append(groupIDs, id.(types.String).ValueString())
+		}
+	}
+
+	device, err := r.client.DeviceCreate(plan.Name.ValueString(), groupIDs)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating device",
@@ -139,7 +162,7 @@ func (r *deviceResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	//setting attributes
 	for attribute, value := range plan.Attributes.Elements() {
-		err := r.client.AttributeSetAttributeForDevice(plan.ID.ValueString(), attribute, strings.Replace(value.String(), "\"", "", 2))
+		err := r.client.AttributeSetAttributeForDevice(plan.ID.ValueString(), attribute, value.(types.String).ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error updating device attribute",
@@ -149,9 +172,9 @@ func (r *deviceResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 	}
 
-	// Assign all profiles in plan
-	for _, profileId := range plan.Profiles.Elements() {
-		err := r.client.ProfileAssignToDevice(strings.Replace(profileId.String(), "\"", "", 2), plan.ID.ValueString())
+	// Assign all custom profiles in plan
+	for _, profileId := range plan.CustomProfiles.Elements() {
+		err := r.client.CustomProfileAssignToDevice(profileId.(types.String).ValueString(), plan.ID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error updating device profile assignment",
@@ -161,15 +184,33 @@ func (r *deviceResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 	}
 
-	// Map response body to schema and populate Computed attribute values
-	//mataDataLink := fmt.Sprintf("%s/%s/%s", r.client.HostName, "private", secret.MetadataKey)
-	//plan.MetaDataLink = types.StringValue(mataDataLink)
-	//plan.SecretValue = types.StringValue(secret.Value)
+	// Assign all custom profiles in plan
+	for _, profileId := range plan.Profiles.Elements() {
+		err := r.client.ProfileAssignToDevice(profileId.(types.String).ValueString(), plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error updating device profile assignment",
+				"Could not update device profile assignment, unexpected error: "+err.Error(),
+			)
+			return
+		}
+	}
 
-	//secretLink := fmt.Sprintf("%s/%s/%s", r.client.HostName, "secret", secret.SecretKey)
-	//plan.SecretLink = types.StringValue(secretLink)
+	// Refresh state from API to populate computed attributes and relationships
+	apiDevice, err := simplemdmext.GetDevice(ctx, r.client, plan.ID.ValueString(), true)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading SimpleMDM device",
+			"Could not read SimpleMDM device "+plan.ID.ValueString()+": "+err.Error(),
+		)
+		return
+	}
 
-	// Set state to fully populated data
+	resp.Diagnostics.Append(r.assignAPIValues(ctx, apiDevice, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -186,20 +227,13 @@ func (r *deviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	resp.Diagnostics.AddWarning(
-		"Notice about profiles:",
-		"API limitations is currently not allowing terraform provider to get state of the profiles assigned to device."+
-			" This is not issue as long as you are using only terraform provider to manage profiles on the device."+
-			" This will be implemented properly once API will have correct responses and we will be able to load profiles assigned to device via API.",
-	)
-
-	// Get device group value from SimpleMDM
-	device, err := r.client.DeviceGet(state.ID.ValueString())
+	apiDevice, err := simplemdmext.GetDevice(ctx, r.client, state.ID.ValueString(), true)
 	if err != nil {
-		if strings.Contains(err.Error(), "404") {
+		if isNotFoundError(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
+
 		resp.Diagnostics.AddError(
 			"Error Reading SimpleMDM device",
 			"Could not read SimpleMDM device "+state.ID.ValueString()+": "+err.Error(),
@@ -207,51 +241,11 @@ func (r *deviceResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return
 	}
 
-	//adding attributes to the map
-	attributePresent := false
-	attributesElements := map[string]attr.Value{}
-	for _, attribute := range device.Data.Relationships.CustomAttributes.Data {
-		if attribute.Attributes.Value != "" {
-			attributesElements[attribute.ID] = types.StringValue(attribute.Attributes.Value)
-			attributePresent = true
-		}
-	}
-	if attributePresent {
-		attributesSetValue, _ := types.MapValue(types.StringType, attributesElements)
-		state.Attributes = attributesSetValue
-	} else {
-		attributesSetValue := types.MapNull(types.StringType)
-		state.Attributes = attributesSetValue
+	resp.Diagnostics.Append(r.assignAPIValues(ctx, apiDevice, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	// Overwrite items with refreshed state
-	state.Name = types.StringValue(device.Data.Attributes.Name)
-	state.DeviceName = types.StringValue(device.Data.Attributes.Name)
-
-	groupsPresent := false
-	groupsElements := []attr.Value{}
-	for _, group := range device.Data.Relationships.Groups.Data {
-		if group.GroupType == "static" {
-			groupsElements = append(groupsElements, types.StringValue(strconv.Itoa(group.ID)))
-			groupsPresent = true
-		}
-	}
-
-	if groupsPresent {
-		groupsElements, _ := types.SetValue(types.StringType, groupsElements)
-		state.DeviceGroups = groupsElements
-	} else {
-		groupsElements := types.SetNull(types.StringType)
-		state.Profiles = groupsElements
-	}
-
-	if device.Data.Attributes.EnrollmentURL == "" {
-		state.EnrollmentURL = types.StringValue("nil")
-	} else {
-		state.EnrollmentURL = types.StringValue(device.Data.Attributes.EnrollmentURL)
-	}
-
-	// Set refreshed state
 	diags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -270,56 +264,35 @@ func (r *deviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
-	// Generate API request body from plan
-	_, err := r.client.DeviceUpdate(plan.ID.ValueString(), plan.Name.ValueString(), plan.DeviceName.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error updating device",
-			"Could not update device, unexpected error: "+err.Error(),
+	// Only update device fields if they actually changed
+	if !plan.Name.Equal(state.Name) || !plan.DeviceName.Equal(state.DeviceName) {
+		_, err := r.client.DeviceUpdate(
+			plan.ID.ValueString(),
+			plan.Name.ValueString(),
+			plan.DeviceName.ValueString(),
 		)
-		return
-	}
-
-	//Handling assigned groups
-	//reading assigned groups from simpleMDM
-	stateGroups := []string{}
-	for _, groupID := range state.DeviceGroups.Elements() {
-		stateGroups = append(stateGroups, strings.Replace(groupID.String(), "\"", "", 2))
-	}
-
-	//reading configured groups from TF file
-	planGroups := []string{}
-	for _, groupId := range plan.DeviceGroups.Elements() {
-		planGroups = append(planGroups, strings.Replace(groupId.String(), "\"", "", 2))
-	}
-
-	// // creating diff
-	groupsToAdd, groupsToRemove := diffFunction(stateGroups, planGroups)
-
-	// //adding groups
-	for _, groupId := range groupsToAdd {
-		err := r.client.AssignmentGroupAssignObject(groupId, plan.ID.ValueString(), "devices")
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Error updating device group assignment",
-				"Could not update device group assignment, unexpected error: "+err.Error(),
+				"Error updating device",
+				"Could not update device, unexpected error: "+err.Error(),
 			)
 			return
 		}
 	}
 
-	//removing groups
-	for _, groupId := range groupsToRemove {
-		err := r.client.AssignmentGroupUnAssignObject(groupId, plan.ID.ValueString(), "devices")
+	// Handle device group assignment if changed
+	// Note: Using deprecated DeviceGroupAssignDevice API for backwards compatibility
+	// TODO: Migrate to assignment groups or static groups when available
+	if !plan.DeviceGroup.IsNull() && !plan.DeviceGroup.Equal(state.DeviceGroup) {
+		err := r.client.DeviceGroupAssignDevice(plan.ID.ValueString(), plan.DeviceGroup.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Error updating device group assignment",
-				"Could not update device group assignment, unexpected error: "+err.Error(),
+				"Error updating device group",
+				"Could not update device group, unexpected error: "+err.Error(),
 			)
 			return
 		}
 	}
-
 	//comparing planed attributes and their values to attributes in SimpleMDM
 	for planAttribute, planValue := range plan.Attributes.Elements() {
 		found := false
@@ -327,7 +300,7 @@ func (r *deviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 			if planAttribute == stateAttribute {
 				found = true
 				if planValue != stateValue {
-					err := r.client.AttributeSetAttributeForDevice(plan.ID.ValueString(), planAttribute, strings.Replace(planValue.String(), "\"", "", 2))
+					err := r.client.AttributeSetAttributeForDevice(plan.ID.ValueString(), planAttribute, planValue.(types.String).ValueString())
 					if err != nil {
 						resp.Diagnostics.AddError(
 							"Error updating SimpleMDM device attributes value",
@@ -340,7 +313,7 @@ func (r *deviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 			}
 		}
 		if !found {
-			err := r.client.AttributeSetAttributeForDevice(plan.ID.ValueString(), planAttribute, strings.Replace(planValue.String(), "\"", "", 2))
+			err := r.client.AttributeSetAttributeForDevice(plan.ID.ValueString(), planAttribute, planValue.(types.String).ValueString())
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Error updating SimpleMDM device attributes value",
@@ -376,13 +349,13 @@ func (r *deviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 	//reading assigned profiles from simpleMDM
 	stateProfiles := []string{}
 	for _, profileId := range state.Profiles.Elements() {
-		stateProfiles = append(stateProfiles, strings.Replace(profileId.String(), "\"", "", 2))
+		stateProfiles = append(stateProfiles, profileId.(types.String).ValueString())
 	}
 
 	//reading configured profiles from TF file
 	planProfiles := []string{}
 	for _, profileId := range plan.Profiles.Elements() {
-		planProfiles = append(planProfiles, strings.Replace(profileId.String(), "\"", "", 2))
+		planProfiles = append(planProfiles, profileId.(types.String).ValueString())
 	}
 
 	// // creating diff
@@ -403,6 +376,46 @@ func (r *deviceResource) Update(ctx context.Context, req resource.UpdateRequest,
 	//removing profiles
 	for _, profileId := range profilesToRemove {
 		err := r.client.ProfileUnAssignToDevice(profileId, plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error updating device custom profile assignment",
+				"Could not update device custom profile assignment, unexpected error: "+err.Error(),
+			)
+			return
+		}
+	}
+
+	//Handling assigned custom prfiles profiles
+	//reading assigned profiles from simpleMDM
+	stateCustomProfiles := []string{}
+	for _, profileId := range state.CustomProfiles.Elements() {
+		stateCustomProfiles = append(stateCustomProfiles, profileId.(types.String).ValueString())
+	}
+
+	//reading configured profiles from TF file
+	planCustomProfiles := []string{}
+	for _, profileId := range plan.CustomProfiles.Elements() {
+		planCustomProfiles = append(planCustomProfiles, profileId.(types.String).ValueString())
+	}
+
+	// // creating diff
+	customProfilesToAdd, customProfilesToRemove := diffFunction(stateCustomProfiles, planCustomProfiles)
+
+	// //adding profiles
+	for _, profileId := range customProfilesToAdd {
+		err := r.client.CustomProfileAssignToDevice(profileId, plan.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error updating device custom profile assignment",
+				"Could not update device custom profile assignment, unexpected error: "+err.Error(),
+			)
+			return
+		}
+	}
+
+	//removing profiles
+	for _, profileId := range customProfilesToRemove {
+		err := r.client.CustomProfileUnAssignToDevice(profileId, plan.ID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error updating device custom profile assignment",
@@ -436,4 +449,59 @@ func (r *deviceResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		)
 		return
 	}
+}
+
+func (r *deviceResource) assignAPIValues(ctx context.Context, apiDevice *simplemdmext.DeviceResponse, model *deviceResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	flatAttributes := simplemdmext.FlattenAttributes(apiDevice.Data.Attributes)
+	detailsValue, detailsDiags := types.MapValueFrom(ctx, types.StringType, flatAttributes)
+	diags.Append(detailsDiags...)
+	if !detailsValue.IsNull() {
+		model.Details = detailsValue
+	} else {
+		model.Details = types.MapNull(types.StringType)
+	}
+
+	if id := apiDevice.Data.ID; id != 0 {
+		model.ID = types.StringValue(strconv.Itoa(id))
+	}
+
+	if name, ok := flatAttributes["name"]; ok && name != "" {
+		model.Name = types.StringValue(name)
+	}
+
+	if deviceName, ok := flatAttributes["device_name"]; ok && deviceName != "" {
+		model.DeviceName = types.StringValue(deviceName)
+	} else if model.DeviceName.IsNull() {
+		model.DeviceName = types.StringNull()
+	}
+
+	enrollmentURL := flatAttributes["enrollment_url"]
+	if enrollmentURL != "" {
+		model.EnrollmentURL = types.StringValue(enrollmentURL)
+	} else {
+		model.EnrollmentURL = types.StringNull()
+	}
+
+	if groupID := apiDevice.Data.Relationships.DeviceGroup.Data.ID; groupID != 0 {
+		model.DeviceGroup = types.StringValue(strconv.Itoa(groupID))
+	}
+
+	attributeValues := map[string]attr.Value{}
+	for _, attribute := range apiDevice.Data.Relationships.CustomAttributeValues.Data {
+		if attribute.Attributes.Value != "" {
+			attributeValues[attribute.ID] = types.StringValue(attribute.Attributes.Value)
+		}
+	}
+
+	if len(attributeValues) > 0 {
+		attributesMap, attrDiags := types.MapValue(types.StringType, attributeValues)
+		diags.Append(attrDiags...)
+		model.Attributes = attributesMap
+	} else {
+		model.Attributes = types.MapNull(types.StringType)
+	}
+
+	return diags
 }

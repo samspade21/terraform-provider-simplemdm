@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/DavidKrau/simplemdm-go-client"
+	"github.com/DavidKrau/terraform-provider-simplemdm/internal/simplemdm"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -19,8 +19,12 @@ var (
 
 // scriptDataSourceModel maps the data source schema data.
 type scriptDataSourceModel struct {
-	ID   types.String `tfsdk:"id"`
-	Name types.String `tfsdk:"name"`
+	ID              types.String `tfsdk:"id"`
+	Name            types.String `tfsdk:"name"`
+	Content         types.String `tfsdk:"content"`
+	VariableSupport types.Bool   `tfsdk:"variable_support"`
+	CreatedAt       types.String `tfsdk:"created_at"`
+	UpdatedAt       types.String `tfsdk:"updated_at"`
 }
 
 // scriptDataSource is a helper function to simplify the provider implementation.
@@ -47,6 +51,22 @@ func (d *scriptDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 				Computed:    true,
 				Description: "The name of the Script.",
 			},
+			"content": schema.StringAttribute{
+				Computed:    true,
+				Description: "The script content.",
+			},
+			"variable_support": schema.BoolAttribute{
+				Computed:    true,
+				Description: "Whether variable support is enabled for this script.",
+			},
+			"created_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the Script was created.",
+			},
+			"updated_at": schema.StringAttribute{
+				Computed:    true,
+				Description: "Timestamp when the Script was last updated.",
+			},
 			"id": schema.StringAttribute{
 				Required:    true,
 				Description: "The ID of the Script.",
@@ -63,16 +83,27 @@ func (d *scriptDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 
 	script, err := d.client.ScriptGet(state.ID.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to Read SimpleMDM Script",
-			err.Error(),
-		)
+		if isNotFoundError(err) {
+			resp.Diagnostics.AddError(
+				"SimpleMDM script not found",
+				fmt.Sprintf("The script with ID %s does not exist or you do not have permission to access it.", state.ID.ValueString()),
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				"Unable to Read SimpleMDM Script",
+				err.Error(),
+			)
+		}
 		return
 	}
 
 	// Map response body to model
 	state.Name = types.StringValue(script.Data.Attributes.Name)
 	state.ID = types.StringValue(strconv.Itoa(script.Data.ID))
+	state.Content = types.StringValue(script.Data.Attributes.Content)
+	state.VariableSupport = types.BoolValue(script.Data.Attributes.VariableSupport)
+	state.CreatedAt = types.StringValue(script.Data.Attributes.CreatedAt)
+	state.UpdatedAt = types.StringValue(script.Data.Attributes.UpdatedAt)
 
 	// Set state
 

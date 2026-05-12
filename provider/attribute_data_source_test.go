@@ -7,16 +7,25 @@ import (
 )
 
 func TestAccAttributeDataSource(t *testing.T) {
+	testAccPreCheck(t)
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Read testing
 			{
-				Config: providerConfig + `data "simplemdm_attribute" "test" {name ="testAttribute"}`,
+				Config: providerConfig + `
+resource "simplemdm_attribute" "test" {
+  name          = "tf_acc_test_attribute"
+  default_value = "test_default"
+}
+
+data "simplemdm_attribute" "test" {
+  name = simplemdm_attribute.test.name
+}
+`,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Verify returned values
-					resource.TestCheckResourceAttr("data.simplemdm_attribute.test", "name", "testAttribute"),
-					resource.TestCheckResourceAttr("data.simplemdm_attribute.test", "default_value", "value set"),
+					resource.TestCheckResourceAttr("data.simplemdm_attribute.test", "name", "tf_acc_test_attribute"),
+					resource.TestCheckResourceAttr("data.simplemdm_attribute.test", "default_value", "test_default"),
 				),
 			},
 		},
